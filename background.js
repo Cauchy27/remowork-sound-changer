@@ -389,7 +389,7 @@ async function saveHandSignSettings(settings) {
 async function playHandSignSound(presetType) {
   try {
     const handSignSettings = await getHandSignSettings();
-    const soundValue = handSignSettings.notifications?.soundPreset || presetType || 'doorchime:doorchime_temple';
+    const soundValue = handSignSettings.notifications?.soundPreset || presetType || 'outgoing:outgoing_horn';
 
     let soundUrl = null;
 

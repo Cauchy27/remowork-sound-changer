@@ -29,13 +29,13 @@
     notifications: {
       toast: true,
       sound: true,
-      soundPreset: 'doorchime'
+      soundPreset: 'outgoing:outgoing_horn' // デフォルトは法螺貝
     }
   };
 
-  // MediaPipe Hands 関連
+  // TensorFlow.js Hand Pose Detection 関連
   let handsDetector = null;
-  let isMediaPipeLoaded = false;
+  let isTensorFlowLoaded = false;
 
   /**
    * 設定を読み込む
@@ -104,6 +104,7 @@
       <div class="rsc-timer-buttons">
         <button class="rsc-send-btn" data-type="wave" title="👋を送信">👋</button>
         <button class="rsc-send-btn" data-type="thumbsup" title="👍を送信">👍</button>
+        <button class="rsc-test-btn" data-type="test" title="通知テスト">🔔</button>
       </div>
     `;
 
@@ -206,12 +207,35 @@
           opacity: 0.3;
           cursor: not-allowed;
         }
+        .rsc-test-btn {
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 6px;
+          background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .rsc-test-btn:hover {
+          background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);
+          transform: scale(1.1);
+        }
+        .rsc-test-btn:active {
+          transform: scale(0.95);
+        }
       `;
       document.head.appendChild(style);
     }
 
     // ボタンのクリックハンドラー
     setupSendButtons();
+
+    // テストボタンのハンドラー
+    setupTestButton();
 
     // ドラッグ機能
     setupDraggable();
@@ -346,6 +370,28 @@
         toggleHandSignSend(type, btn);
       });
     });
+  }
+
+  /**
+   * テスト通知ボタンのセットアップ
+   */
+  function setupTestButton() {
+    const testBtn = timerElement.querySelector('.rsc-test-btn');
+    if (testBtn) {
+      testBtn.addEventListener('click', () => {
+        testNotification();
+      });
+    }
+  }
+
+  /**
+   * テスト通知を実行
+   */
+  function testNotification() {
+    const testGesture = { emoji: '👋', message: '話したそうにしています（テスト）' };
+    showToast('テストユーザー', testGesture);
+    playNotificationSound();
+    showTimerToast('通知テストを実行しました');
   }
 
   /**
@@ -615,37 +661,61 @@
   }
 
   /**
-   * MediaPipe Hands を初期化
+   * スクリプトを動的に読み込む
    */
-  async function initMediaPipe() {
-    if (isMediaPipeLoaded) return true;
+  function loadScript(url) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * TensorFlow.js Hand Pose Detection を初期化
+   */
+  async function initTensorFlow() {
+    if (isTensorFlowLoaded) return true;
 
     try {
-      // MediaPipe Vision Tasks をインポート
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/+esm');
+      console.log('[HandSign] Loading TensorFlow.js...');
 
-      const { HandLandmarker, FilesetResolver } = vision;
+      // TensorFlow.js を読み込み
+      const tfUrl = chrome.runtime.getURL('lib/tf.min.js');
+      await loadScript(tfUrl);
+      console.log('[HandSign] TensorFlow.js loaded');
 
-      const filesetResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
-      );
+      // Hand Pose Detection を読み込み
+      const handPoseUrl = chrome.runtime.getURL('lib/hand-pose-detection.min.js');
+      await loadScript(handPoseUrl);
+      console.log('[HandSign] Hand Pose Detection loaded');
 
-      handsDetector = await HandLandmarker.createFromOptions(filesetResolver, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-          delegate: 'GPU'
-        },
-        runningMode: 'IMAGE',
-        numHands: 2
-      });
+      // MediaPipe Hands モデルを作成
+      // @ts-ignore
+      const model = window.handPoseDetection.SupportedModels.MediaPipeHands;
+      const detectorConfig = {
+        runtime: 'tfjs',
+        modelType: 'lite', // 'lite' or 'full'
+        maxHands: 2
+      };
 
-      isMediaPipeLoaded = true;
-      console.log('[HandSign] MediaPipe Hands initialized');
+      // @ts-ignore
+      handsDetector = await window.handPoseDetection.createDetector(model, detectorConfig);
+
+      isTensorFlowLoaded = true;
+      console.log('[HandSign] TensorFlow.js Hand Pose Detection initialized');
       return true;
     } catch (error) {
-      console.error('[HandSign] Failed to initialize MediaPipe:', error);
+      console.error('[HandSign] Failed to initialize TensorFlow.js:', error);
       return false;
     }
+  }
+
+  // MediaPipe互換の初期化関数（既存コードとの互換性のため）
+  async function initMediaPipe() {
+    return initTensorFlow();
   }
 
   /**
@@ -740,10 +810,17 @@
       let gesture = null;
 
       if (handsDetector) {
-        // MediaPipe を使用
-        const results = handsDetector.detect(canvas);
-        if (results.landmarks && results.landmarks.length > 0) {
-          gesture = detectGesture(results.landmarks[0]);
+        // TensorFlow.js Hand Pose Detection を使用
+        const hands = await handsDetector.estimateHands(canvas);
+        if (hands && hands.length > 0) {
+          // keypointsを正規化された座標に変換
+          const keypoints = hands[0].keypoints;
+          const normalizedLandmarks = keypoints.map(kp => ({
+            x: kp.x / canvas.width,
+            y: kp.y / canvas.height,
+            z: kp.z || 0
+          }));
+          gesture = detectGesture(normalizedLandmarks);
         }
       } else {
         // フォールバック（簡易検出）

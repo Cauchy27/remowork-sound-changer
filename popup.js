@@ -55,7 +55,7 @@ let handSignSettings = {
   notifications: {
     toast: true,
     sound: true,
-    soundPreset: 'doorchime'
+    soundPreset: 'outgoing:outgoing_horn' // デフォルトは法螺貝
   }
 };
 
@@ -703,7 +703,7 @@ async function setupHandSignSettings() {
   const soundPresetSelect = document.getElementById('handsign-sound-preset');
   if (soundPresetSelect) {
     await populateHandSignSoundOptions(soundPresetSelect);
-    soundPresetSelect.value = handSignSettings.notifications?.soundPreset || 'doorchime:doorchime_temple';
+    soundPresetSelect.value = handSignSettings.notifications?.soundPreset || 'outgoing:outgoing_horn';
     soundPresetSelect.addEventListener('change', async () => {
       handSignSettings.notifications = handSignSettings.notifications || {};
       handSignSettings.notifications.soundPreset = soundPresetSelect.value;
@@ -723,7 +723,7 @@ async function setupHandSignSettings() {
   const testSoundBtn = document.getElementById('test-handsign-sound');
   if (testSoundBtn) {
     testSoundBtn.addEventListener('click', async () => {
-      const soundValue = handSignSettings.notifications?.soundPreset || 'doorchime:doorchime_temple';
+      const soundValue = handSignSettings.notifications?.soundPreset || 'outgoing:outgoing_horn';
       await playHandSignTestSound(soundValue);
     });
   }

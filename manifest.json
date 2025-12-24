@@ -56,7 +56,14 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["inject.js", "virtual-camera.js", "sounds/*/*", "recorder.css"],
+      "resources": [
+        "inject.js",
+        "virtual-camera.js",
+        "sounds/*/*",
+        "recorder.css",
+        "lib/tf.min.js",
+        "lib/hand-pose-detection.min.js"
+      ],
       "matches": ["https://stage.remowork.biz/*", "https://remowork.biz/*"]
     }
   ]
