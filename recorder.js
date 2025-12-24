@@ -216,52 +216,88 @@
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       audioDestination = audioContext.createMediaStreamDestination();
 
-      let hasAnySource = false;
+      let hasMic = false;
+      let hasTabAudio = false;
 
       // 1. マイク（自分の音声）を取得
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const micSource = audioContext.createMediaStreamSource(micStream);
         micSource.connect(audioDestination);
-        hasAnySource = true;
+        hasMic = true;
         console.log('[RemoworkRecorder] Microphone connected');
       } catch (e) {
         console.warn('[RemoworkRecorder] Microphone not available:', e);
       }
 
       // 2. 画面共有で音声を取得（タブの音声をキャプチャ）
+      // 重要: video: true が必要（falseだと音声共有オプションが出ない場合がある）
       try {
+        // ユーザーに説明を表示
+        showInfo('画面共有ダイアログで「タブの音声を共有」にチェックを入れてください');
+
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
           audio: {
             echoCancellation: false,
             noiseSuppression: false,
-            autoGainControl: false
+            autoGainControl: false,
+            suppressLocalAudioPlayback: false
           },
-          video: false // 音声のみ
+          video: {
+            width: 1,
+            height: 1,
+            frameRate: 1
+          },
+          preferCurrentTab: true,
+          selfBrowserSurface: 'include',
+          systemAudio: 'include'
         });
 
         const audioTracks = displayStream.getAudioTracks();
+        console.log('[RemoworkRecorder] Audio tracks:', audioTracks.length);
+
         if (audioTracks.length > 0) {
-          const tabSource = audioContext.createMediaStreamSource(displayStream);
+          // 音声トラックのみを使用する新しいストリームを作成
+          const audioOnlyStream = new MediaStream(audioTracks);
+          const tabSource = audioContext.createMediaStreamSource(audioOnlyStream);
           tabSource.connect(audioDestination);
-          hasAnySource = true;
+          hasTabAudio = true;
           console.log('[RemoworkRecorder] Tab audio connected via getDisplayMedia');
 
-          // ビデオトラックがあれば停止（音声のみ必要）
-          displayStream.getVideoTracks().forEach(track => track.stop());
+          // ビデオトラックを停止（音声には影響しない）
+          displayStream.getVideoTracks().forEach(track => {
+            console.log('[RemoworkRecorder] Stopping video track:', track.label);
+            track.stop();
+          });
+        } else {
+          console.warn('[RemoworkRecorder] No audio tracks in display stream - did you check "Share tab audio"?');
+          showError('タブの音声が共有されていません。\n「タブの音声を共有」にチェックを入れてください。');
         }
       } catch (e) {
-        console.warn('[RemoworkRecorder] Tab audio capture failed, trying alternative:', e);
+        console.warn('[RemoworkRecorder] Tab audio capture failed:', e);
 
-        // 代替方法: audio/video要素から直接キャプチャ
+        // 代替方法: ページ内のaudio/video要素から直接キャプチャ
         const audioElements = document.querySelectorAll('audio, video');
+        console.log('[RemoworkRecorder] Found audio/video elements:', audioElements.length);
+
         for (const element of audioElements) {
           try {
+            // srcObjectがある場合（WebRTCストリーム）
             if (element.srcObject && element.srcObject.getAudioTracks().length > 0) {
               const source = audioContext.createMediaStreamSource(element.srcObject);
               source.connect(audioDestination);
-              hasAnySource = true;
-              console.log('[RemoworkRecorder] Audio element stream connected');
+              hasTabAudio = true;
+              console.log('[RemoworkRecorder] Audio element stream connected:', element.srcObject.id);
+            }
+            // captureStreamが使える場合
+            else if (element.captureStream) {
+              const stream = element.captureStream();
+              if (stream.getAudioTracks().length > 0) {
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(audioDestination);
+                hasTabAudio = true;
+                console.log('[RemoworkRecorder] Audio element captureStream connected');
+              }
             }
           } catch (err) {
             console.warn('[RemoworkRecorder] Could not capture audio element:', err);
@@ -269,9 +305,15 @@
         }
       }
 
-      if (!hasAnySource) {
+      if (!hasMic && !hasTabAudio) {
         throw new Error('音声ソースが見つかりません');
       }
+
+      // 録音ソースの状態を表示
+      const sources = [];
+      if (hasMic) sources.push('マイク');
+      if (hasTabAudio) sources.push('タブ音声');
+      showInfo(`録音開始: ${sources.join(' + ')}`);
 
       return audioDestination.stream;
 
@@ -279,6 +321,32 @@
       console.error('[RemoworkRecorder] Failed to capture audio:', error);
       return null;
     }
+  }
+
+  /**
+   * 情報メッセージを表示
+   */
+  function showInfo(message) {
+    console.log('[RemoworkRecorder] Info:', message);
+    // 一時的なトースト表示
+    const toast = document.createElement('div');
+    toast.className = 'rsc-toast rsc-toast-info';
+    toast.textContent = message;
+    toast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2196F3;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      z-index: 100001;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
   }
 
   /**
