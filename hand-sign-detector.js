@@ -8,11 +8,17 @@
 
   const DETECTION_INTERVAL = 10000; // 10秒ごとにチェック（画像URL変更検知用）
   const NOTIFICATION_COOLDOWN = 300000; // 同じ人からの通知は5分間抑制
+  const PHOTO_INTERVAL = 300; // 写真撮影間隔（5分 = 300秒）
 
   // 検出済みの画像URLを記録（重複検出防止）
   const processedImages = new Map();
   // 通知クールダウン管理
   const notificationCooldowns = new Map();
+  // タイマー関連
+  let timerElement = null;
+  let remainingSeconds = PHOTO_INTERVAL;
+  let lastMyImageUrl = null;
+  let timerInterval = null;
 
   // 設定（デフォルト値）
   let settings = {
@@ -60,6 +66,207 @@
         // 設定を保存
         chrome.storage.local.set({ handSignSettings: settings });
       }
+    }
+  }
+
+  /**
+   * 自分の画像URLを取得
+   */
+  function getMyImageUrl() {
+    const loginUserContainer = document.querySelector('.user-picture-container.login-user');
+    if (loginUserContainer) {
+      const imageElement = loginUserContainer.querySelector('.v-image__image');
+      if (imageElement) {
+        const style = imageElement.getAttribute('style') || '';
+        const match = style.match(/background-image:\s*url\(["']?([^"')]+)["']?\)/);
+        if (match && match[1]) {
+          return match[1];
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * タイマーUIを作成
+   */
+  function createTimerUI() {
+    if (timerElement) return;
+
+    timerElement = document.createElement('div');
+    timerElement.id = 'rsc-photo-timer';
+    timerElement.innerHTML = `
+      <div class="rsc-timer-icon">📷</div>
+      <div class="rsc-timer-text">
+        <span class="rsc-timer-label">次の撮影まで</span>
+        <span class="rsc-timer-value">5:00</span>
+      </div>
+    `;
+
+    document.body.appendChild(timerElement);
+
+    // スタイルを追加
+    if (!document.getElementById('rsc-timer-styles')) {
+      const style = document.createElement('style');
+      style.id = 'rsc-timer-styles';
+      style.textContent = `
+        #rsc-photo-timer {
+          position: fixed;
+          bottom: 20px;
+          left: 20px;
+          background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+          color: white;
+          padding: 10px 16px;
+          border-radius: 10px;
+          z-index: 100000;
+          font-size: 14px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          opacity: 0.9;
+          transition: opacity 0.2s;
+        }
+        #rsc-photo-timer:hover {
+          opacity: 1;
+        }
+        #rsc-photo-timer.rsc-timer-hidden {
+          display: none;
+        }
+        .rsc-timer-icon {
+          font-size: 20px;
+        }
+        .rsc-timer-text {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .rsc-timer-label {
+          font-size: 11px;
+          color: #a0aec0;
+        }
+        .rsc-timer-value {
+          font-size: 18px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
+        #rsc-photo-timer.rsc-timer-soon .rsc-timer-value {
+          color: #fc8181;
+        }
+        #rsc-photo-timer.rsc-timer-flash {
+          animation: rsc-timer-flash 0.5s ease-out;
+        }
+        @keyframes rsc-timer-flash {
+          0% { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+          100% { background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }
+
+  /**
+   * タイマー表示を更新
+   */
+  function updateTimerDisplay() {
+    if (!timerElement) return;
+
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+    const valueElement = timerElement.querySelector('.rsc-timer-value');
+    if (valueElement) {
+      valueElement.textContent = timeStr;
+    }
+
+    // 残り30秒以下で色を変える
+    if (remainingSeconds <= 30) {
+      timerElement.classList.add('rsc-timer-soon');
+    } else {
+      timerElement.classList.remove('rsc-timer-soon');
+    }
+  }
+
+  /**
+   * タイマーをリセット（写真撮影時）
+   */
+  function resetTimer() {
+    remainingSeconds = PHOTO_INTERVAL;
+    updateTimerDisplay();
+
+    // フラッシュアニメーション
+    if (timerElement) {
+      timerElement.classList.remove('rsc-timer-flash');
+      void timerElement.offsetWidth; // リフロー強制
+      timerElement.classList.add('rsc-timer-flash');
+    }
+
+    console.log('[HandSign] Timer reset to 5 minutes');
+  }
+
+  /**
+   * タイマーを1秒減らす
+   */
+  function tickTimer() {
+    if (remainingSeconds > 0) {
+      remainingSeconds--;
+      updateTimerDisplay();
+    }
+  }
+
+  /**
+   * 自分の画像URL変更を監視
+   */
+  function checkMyImageChange() {
+    const currentUrl = getMyImageUrl();
+    if (currentUrl && lastMyImageUrl && currentUrl !== lastMyImageUrl) {
+      // 画像が変わった = 写真が撮られた
+      console.log('[HandSign] My image changed, resetting timer');
+      resetTimer();
+    }
+    lastMyImageUrl = currentUrl;
+  }
+
+  /**
+   * タイマーを開始
+   */
+  function startTimer() {
+    if (timerInterval) return;
+
+    // 初期画像URLを取得
+    lastMyImageUrl = getMyImageUrl();
+
+    // 1秒ごとにカウントダウン
+    timerInterval = setInterval(() => {
+      tickTimer();
+      checkMyImageChange();
+    }, 1000);
+
+    console.log('[HandSign] Timer started');
+  }
+
+  /**
+   * タイマーを停止
+   */
+  function stopTimer() {
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  }
+
+  /**
+   * タイマーの表示/非表示を切り替え
+   */
+  function updateTimerVisibility() {
+    if (!timerElement) return;
+
+    if (settings.enabled) {
+      timerElement.classList.remove('rsc-timer-hidden');
+    } else {
+      timerElement.classList.add('rsc-timer-hidden');
     }
   }
 
@@ -416,6 +623,14 @@
     // 自分の名前を検出
     detectMyName();
 
+    // タイマーUIを作成
+    createTimerUI();
+    updateTimerDisplay();
+    updateTimerVisibility();
+
+    // タイマーを開始
+    startTimer();
+
     // MediaPipe を初期化（バックグラウンドで）
     initMediaPipe().catch(console.error);
 
@@ -433,6 +648,7 @@
     if (namespace === 'local' && changes.handSignSettings) {
       settings = { ...settings, ...changes.handSignSettings.newValue };
       console.log('[HandSign] Settings updated:', settings);
+      updateTimerVisibility();
     }
   });
 
