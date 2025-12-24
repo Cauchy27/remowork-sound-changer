@@ -8,6 +8,113 @@ const DB_VERSION = 1;
 const STORE_NAME = 'sounds';
 const MAX_FILE_SIZE = 300 * 1024 * 1024; // 300MB
 
+// ========================================
+// APIキー暗号化用ユーティリティ
+// ========================================
+
+// 暗号化キー（拡張機能IDベースで生成）
+let encryptionKey = null;
+
+/**
+ * 暗号化キーを取得または生成
+ */
+async function getEncryptionKey() {
+  if (encryptionKey) return encryptionKey;
+
+  // 保存済みキーを確認
+  const stored = await chrome.storage.local.get(['_encKey']);
+  if (stored._encKey) {
+    const keyData = new Uint8Array(stored._encKey);
+    encryptionKey = await crypto.subtle.importKey(
+      'raw', keyData, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']
+    );
+    return encryptionKey;
+  }
+
+  // 新規キー生成
+  encryptionKey = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']
+  );
+  const exportedKey = await crypto.subtle.exportKey('raw', encryptionKey);
+  await chrome.storage.local.set({ _encKey: Array.from(new Uint8Array(exportedKey)) });
+  return encryptionKey;
+}
+
+/**
+ * APIキーを暗号化
+ */
+async function encryptApiKey(apiKey) {
+  if (!apiKey) return null;
+  const key = await getEncryptionKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(apiKey);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, key, encoded
+  );
+  return {
+    iv: Array.from(iv),
+    data: Array.from(new Uint8Array(encrypted))
+  };
+}
+
+/**
+ * APIキーを復号化
+ */
+async function decryptApiKey(encryptedData) {
+  if (!encryptedData || !encryptedData.iv || !encryptedData.data) return '';
+  try {
+    const key = await getEncryptionKey();
+    const iv = new Uint8Array(encryptedData.iv);
+    const data = new Uint8Array(encryptedData.data);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv }, key, data
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch (error) {
+    console.error('[Background] Failed to decrypt API key:', error);
+    return '';
+  }
+}
+
+/**
+ * カスタムAPIエンドポイントを検証
+ */
+function validateApiEndpoint(url) {
+  if (!url) throw new Error('エンドポイントURLが指定されていません');
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch (e) {
+    throw new Error('無効なURL形式です');
+  }
+
+  // HTTPSのみ許可（localhostは開発用に許可）
+  if (parsedUrl.protocol !== 'https:' && parsedUrl.hostname !== 'localhost' && parsedUrl.hostname !== '127.0.0.1') {
+    throw new Error('セキュリティのためHTTPSが必要です');
+  }
+
+  // プライベートIPアドレスをブロック（localhost以外）
+  const hostname = parsedUrl.hostname;
+  const privateIpPatterns = [
+    /^10\./,
+    /^172\.(1[6-9]|2[0-9]|3[01])\./,
+    /^192\.168\./,
+    /^169\.254\./,
+    /^0\./
+  ];
+
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    for (const pattern of privateIpPatterns) {
+      if (pattern.test(hostname)) {
+        throw new Error('プライベートIPアドレスへのアクセスは許可されていません');
+      }
+    }
+  }
+
+  return parsedUrl.href;
+}
+
 // 対象音声ファイルの定義
 // 複数のパスで同じ音声が使われる場合はpathsを使用
 const SOUND_TYPES = {
@@ -581,12 +688,12 @@ chrome.runtime.onInstalled.addListener(() => {
 // ========================================
 
 /**
- * LLM設定を取得
+ * LLM設定を取得（APIキーは復号化して返す）
  */
 async function getLLMSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['llmSettings'], (result) => {
-      resolve(result.llmSettings || {
+  return new Promise(async (resolve) => {
+    chrome.storage.local.get(['llmSettings', '_llmApiKey'], async (result) => {
+      const settings = result.llmSettings || {
         enabled: false,
         provider: 'gemini',
         model: 'gemini-2.0-flash',
@@ -595,17 +702,31 @@ async function getLLMSettings() {
         autoStructure: true,
         extractActions: true,
         extractDecisions: true
-      });
+      };
+
+      // 暗号化されたAPIキーを復号化
+      if (result._llmApiKey) {
+        settings.apiKey = await decryptApiKey(result._llmApiKey);
+      }
+
+      resolve(settings);
     });
   });
 }
 
 /**
- * LLM設定を保存
+ * LLM設定を保存（APIキーは暗号化して保存）
  */
 async function saveLLMSettings(settings) {
+  // APIキーを分離して暗号化
+  const { apiKey, ...otherSettings } = settings;
+  const encryptedApiKey = await encryptApiKey(apiKey);
+
   return new Promise((resolve) => {
-    chrome.storage.local.set({ llmSettings: settings }, resolve);
+    chrome.storage.local.set({
+      llmSettings: { ...otherSettings, apiKey: '' }, // 平文APIキーは保存しない
+      _llmApiKey: encryptedApiKey
+    }, resolve);
   });
 }
 
@@ -728,7 +849,10 @@ async function callClaudeAPI(prompt, model, apiKey) {
  * カスタムAPI（OpenAI互換）を呼び出す
  */
 async function callCustomAPI(prompt, model, apiKey, endpoint) {
-  const response = await fetch(endpoint, {
+  // エンドポイントURLを検証（HTTPS強制、プライベートIPブロック）
+  const validatedEndpoint = validateApiEndpoint(endpoint);
+
+  const response = await fetch(validatedEndpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

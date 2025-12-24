@@ -30,8 +30,8 @@
     thumbsup: null
   };
 
-  // 拡張機能のベースURL（Content Scriptから受け取る）
-  let extensionBaseUrl = '';
+  // 描画用interval ID（メモリリーク防止用）
+  let currentDrawInterval = null;
 
   console.log('[VirtualCamera] Initializing...');
 
@@ -60,10 +60,17 @@
     };
     img.src = imageData;
 
+    // 既存のintervalをクリア（メモリリーク防止）
+    if (currentDrawInterval) {
+      clearInterval(currentDrawInterval);
+      currentDrawInterval = null;
+    }
+
     // 定期的に再描画（静止画でもストリームを維持）
-    const drawInterval = setInterval(() => {
+    currentDrawInterval = setInterval(() => {
       if (!virtualCameraEnabled) {
-        clearInterval(drawInterval);
+        clearInterval(currentDrawInterval);
+        currentDrawInterval = null;
         return;
       }
       if (img.complete) {
@@ -266,12 +273,6 @@
           wave: !!defaultImages.wave,
           thumbsup: !!defaultImages.thumbsup
         });
-        break;
-
-      case 'SET_EXTENSION_URL':
-        // 拡張機能のベースURLを設定
-        extensionBaseUrl = payload.url;
-        console.log('[VirtualCamera] Extension URL set:', extensionBaseUrl);
         break;
     }
   });

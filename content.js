@@ -88,6 +88,7 @@
   async function loadVirtualCameraImages() {
     try {
       const result = await chrome.storage.local.get(['virtualCameraImages']);
+
       if (result.virtualCameraImages) {
         window.postMessage({
           source: 'remowork-virtual-camera',
@@ -96,7 +97,8 @@
         }, '*');
       }
 
-      // デフォルト画像を読み込んで設定
+      // デフォルト画像を読み込んで設定（常にフォールバック用に読み込む）
+      // ユーザー登録画像がある場合でも、デフォルト画像はフォールバックとして必要
       loadDefaultImages();
     } catch (error) {
       console.error('[RemoworkSoundChanger] Failed to load virtual camera images:', error);
