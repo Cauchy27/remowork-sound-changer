@@ -181,6 +181,13 @@
         .rsc-timer-main:hover {
           background: rgba(255,255,255,0.1);
         }
+        .rsc-timer-main.rsc-countdown-enabled {
+          background: rgba(72, 187, 120, 0.25);
+          box-shadow: inset 0 0 0 1px rgba(72, 187, 120, 0.5);
+        }
+        .rsc-timer-main.rsc-countdown-enabled:hover {
+          background: rgba(72, 187, 120, 0.35);
+        }
         .rsc-timer-main .rsc-timer-icon {
           position: relative;
         }
