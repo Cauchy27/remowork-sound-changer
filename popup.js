@@ -11,8 +11,7 @@ const SOUND_LABELS = {
   incoming: '着信音',
   outgoing: '発信音',
   disconnect: '切断音',
-  doorchime: 'ドアチャイム',
-  test: 'テスト音声'
+  doorchime: 'ドアチャイム'
 };
 
 const SOUND_DESCRIPTIONS = {
@@ -20,8 +19,7 @@ const SOUND_DESCRIPTIONS = {
   incoming: '電話がかかってきた時に鳴る音',
   outgoing: '発信ボタンを押した時に鳴る音',
   disconnect: '通話が終了・切断された時に鳴る音',
-  doorchime: '内線着信時に鳴る音',
-  test: 'デバイス設定の着信音テストで鳴る音'
+  doorchime: '内線着信時に鳴る音'
 };
 
 const MODE_LABELS = {
@@ -38,8 +36,7 @@ const DEFAULT_SOUND_TYPES = {
   incoming: { path: '/client/incoming.mp3', label: '着信音' },
   outgoing: { path: '/client/outgoing.mp3', label: '発信音' },
   disconnect: { path: '/client/disconnect.mp3', label: '切断音' },
-  doorchime: { path: '/client/doorchime.mp3', label: 'ドアチャイム' },
-  test: { path: '/client/test.mp3', label: 'テスト音声' }
+  doorchime: { path: '/client/doorchime.mp3', label: 'ドアチャイム' }
 };
 
 let soundTypes = {};
@@ -249,6 +246,11 @@ async function handleSoundListChange(e) {
  * モード変更の処理
  */
 async function handleModeChange(soundId, mode, item) {
+  // 該当の音声が再生中なら停止
+  if (currentPlayingId === soundId) {
+    stopPlayback();
+  }
+
   item.classList.add('loading');
 
   try {
@@ -381,25 +383,55 @@ async function handleSoundListClick(e) {
 }
 
 /**
+ * 再生を停止する共通関数
+ */
+function stopPlayback() {
+  if (!previewAudio) return;
+
+  previewAudio.pause();
+  previewAudio.currentTime = 0;
+
+  if (currentPlayingId) {
+    const prevButton = document.querySelector(`.sound-item[data-id="${currentPlayingId}"] .btn-play`);
+    if (prevButton) {
+      updatePlayButtonState(prevButton, false);
+    }
+    currentPlayingId = null;
+  }
+}
+
+/**
+ * 再生ボタンの状態を更新
+ */
+function updatePlayButtonState(button, isPlaying) {
+  const iconPlay = button.querySelector('.icon-play');
+  const iconStop = button.querySelector('.icon-stop');
+
+  if (isPlaying) {
+    button.classList.add('playing');
+    button.title = '停止';
+    if (iconPlay) iconPlay.style.display = 'none';
+    if (iconStop) iconStop.style.display = 'block';
+  } else {
+    button.classList.remove('playing');
+    button.title = '再生';
+    if (iconPlay) iconPlay.style.display = 'block';
+    if (iconStop) iconStop.style.display = 'none';
+  }
+}
+
+/**
  * 再生ボタンのクリック処理
  */
 async function handlePlayClick(soundId, button, item) {
   // 再生中なら停止
   if (currentPlayingId === soundId) {
-    previewAudio.pause();
-    previewAudio.currentTime = 0;
-    button.classList.remove('playing');
-    currentPlayingId = null;
+    stopPlayback();
     return;
   }
 
   // 他の再生を停止
-  if (currentPlayingId) {
-    previewAudio.pause();
-    previewAudio.currentTime = 0;
-    const prevButton = document.querySelector(`.sound-item[data-id="${currentPlayingId}"] .btn-play`);
-    if (prevButton) prevButton.classList.remove('playing');
-  }
+  stopPlayback();
 
   const modeValue = item.querySelector('.sound-mode').value;
   let audioUrl = null;
@@ -444,12 +476,18 @@ async function handlePlayClick(soundId, button, item) {
     if (audioUrl) {
       previewAudio.src = audioUrl;
       previewAudio.play();
-      button.classList.add('playing');
+      updatePlayButtonState(button, true);
       currentPlayingId = soundId;
 
       previewAudio.onended = () => {
-        button.classList.remove('playing');
+        updatePlayButtonState(button, false);
         currentPlayingId = null;
+      };
+
+      previewAudio.onerror = () => {
+        updatePlayButtonState(button, false);
+        currentPlayingId = null;
+        showToast('再生に失敗しました', 'error');
       };
     }
   } catch (error) {
