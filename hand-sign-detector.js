@@ -1523,6 +1523,11 @@
   let currentPlayingAudio = null;
   let currentPlayingId = null;
 
+  // 文字起こし関連（Web Speech API）
+  let speechRecognition = null;
+  let transcriptText = '';
+  let isTranscribing = false;
+
   /**
    * 統合モーダルを作成（撮影 + 録音）
    */
@@ -1599,6 +1604,27 @@
           <div class="rsc-recorder-info">
             タブの音声を録音するには「タブの音声を共有」にチェックを入れてください
           </div>
+
+          <!-- 文字起こし・メモエリア -->
+          <div class="rsc-meeting-notes">
+            <div class="rsc-notes-section">
+              <div class="rsc-notes-header">
+                <span class="rsc-notes-title">📝 文字起こし</span>
+                <label class="rsc-notes-toggle">
+                  <input type="checkbox" class="rsc-transcript-toggle" checked>
+                  <span>自動文字起こし</span>
+                </label>
+              </div>
+              <div class="rsc-transcript-area" contenteditable="false"></div>
+            </div>
+            <div class="rsc-notes-section">
+              <div class="rsc-notes-header">
+                <span class="rsc-notes-title">✏️ メモ</span>
+              </div>
+              <textarea class="rsc-manual-notes" placeholder="メモを入力..."></textarea>
+            </div>
+          </div>
+
           <div class="rsc-recorder-recordings"></div>
         </div>
       </div>
@@ -1918,6 +1944,76 @@
         padding: 12px;
         background: rgba(255,255,255,0.05);
         border-radius: 8px;
+      }
+      /* 文字起こし・メモエリア */
+      .rsc-meeting-notes {
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .rsc-notes-section {
+        background: rgba(255,255,255,0.05);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .rsc-notes-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .rsc-notes-title {
+        color: #a0aec0;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .rsc-notes-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #718096;
+        cursor: pointer;
+      }
+      .rsc-notes-toggle input {
+        width: 14px;
+        height: 14px;
+        accent-color: #48bb78;
+      }
+      .rsc-transcript-area {
+        background: rgba(0,0,0,0.2);
+        border-radius: 6px;
+        padding: 10px;
+        min-height: 80px;
+        max-height: 120px;
+        overflow-y: auto;
+        font-size: 13px;
+        color: #e2e8f0;
+        line-height: 1.5;
+      }
+      .rsc-transcript-area:empty::before {
+        content: '録音を開始すると文字起こしが表示されます...';
+        color: #4a5568;
+      }
+      .rsc-manual-notes {
+        width: 100%;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 6px;
+        padding: 10px;
+        min-height: 60px;
+        font-size: 13px;
+        color: #e2e8f0;
+        resize: vertical;
+        font-family: inherit;
+      }
+      .rsc-manual-notes:focus {
+        outline: none;
+        border-color: rgba(72, 187, 120, 0.5);
+      }
+      .rsc-manual-notes::placeholder {
+        color: #4a5568;
       }
       .rsc-recorder-recordings {
         max-height: 200px;
@@ -2356,6 +2452,13 @@
       updateRecorderUI('recording');
       startRecorderTimer();
 
+      // メモエリアを表示してクリア
+      showMeetingNotesArea(true);
+      clearMeetingNotes();
+
+      // 文字起こしを開始
+      startTranscription();
+
       console.log('[HandSign] Recording started');
 
     } catch (error) {
@@ -2459,8 +2562,146 @@
     if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
       mediaRecorder.stop();
       stopRecorderTimer();
+      stopTranscription();
       updateRecorderUI('idle');
     }
+  }
+
+  /**
+   * 文字起こしを開始（Web Speech API）
+   */
+  function startTranscription() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('[HandSign] Web Speech API not supported');
+      return;
+    }
+
+    const toggleCheckbox = toolsModal?.querySelector('.rsc-transcript-toggle');
+    if (toggleCheckbox && !toggleCheckbox.checked) {
+      return; // 文字起こしがOFFの場合
+    }
+
+    transcriptText = '';
+    isTranscribing = true;
+
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.continuous = true;
+    speechRecognition.interimResults = true;
+    speechRecognition.lang = 'ja-JP';
+
+    speechRecognition.onresult = (event) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        transcriptText += finalTranscript + '\n';
+      }
+
+      updateTranscriptDisplay(transcriptText + interimTranscript);
+    };
+
+    speechRecognition.onerror = (event) => {
+      console.warn('[HandSign] Speech recognition error:', event.error);
+      if (event.error === 'no-speech' && isTranscribing) {
+        // 無音の場合は再起動
+        setTimeout(() => {
+          if (isTranscribing) {
+            try {
+              speechRecognition.start();
+            } catch (e) {}
+          }
+        }, 100);
+      }
+    };
+
+    speechRecognition.onend = () => {
+      // 録音中なら再開
+      if (isTranscribing) {
+        try {
+          speechRecognition.start();
+        } catch (e) {}
+      }
+    };
+
+    try {
+      speechRecognition.start();
+      console.log('[HandSign] Transcription started');
+    } catch (e) {
+      console.error('[HandSign] Failed to start transcription:', e);
+    }
+  }
+
+  /**
+   * 文字起こしを停止
+   */
+  function stopTranscription() {
+    isTranscribing = false;
+    if (speechRecognition) {
+      try {
+        speechRecognition.stop();
+      } catch (e) {}
+      speechRecognition = null;
+    }
+    console.log('[HandSign] Transcription stopped');
+  }
+
+  /**
+   * 文字起こし表示を更新
+   */
+  function updateTranscriptDisplay(text) {
+    const transcriptArea = toolsModal?.querySelector('.rsc-transcript-area');
+    if (transcriptArea) {
+      transcriptArea.textContent = text;
+      transcriptArea.scrollTop = transcriptArea.scrollHeight;
+    }
+  }
+
+  /**
+   * メモエリアを表示/非表示
+   */
+  function showMeetingNotesArea(show) {
+    const notesArea = toolsModal?.querySelector('.rsc-meeting-notes');
+    if (notesArea) {
+      notesArea.style.display = show ? 'flex' : 'none';
+    }
+  }
+
+  /**
+   * メモをクリア
+   */
+  function clearMeetingNotes() {
+    transcriptText = '';
+    const transcriptArea = toolsModal?.querySelector('.rsc-transcript-area');
+    const manualNotes = toolsModal?.querySelector('.rsc-manual-notes');
+    if (transcriptArea) transcriptArea.textContent = '';
+    if (manualNotes) manualNotes.value = '';
+  }
+
+  /**
+   * 現在のメモを取得
+   */
+  function getMeetingNotesText() {
+    const manualNotes = toolsModal?.querySelector('.rsc-manual-notes')?.value || '';
+    let text = '';
+
+    if (transcriptText.trim()) {
+      text += '【文字起こし】\n' + transcriptText.trim() + '\n\n';
+    }
+    if (manualNotes.trim()) {
+      text += '【メモ】\n' + manualNotes.trim() + '\n';
+    }
+
+    return text;
   }
 
   /**
@@ -2468,12 +2709,15 @@
    */
   function saveRecordingData(blob) {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const notesText = getMeetingNotesText();
+
     const recording = {
       id: Date.now(),
       name: `録音_${timestamp}`,
       blob: blob,
       duration: formatRecorderTime(Date.now() - recordingStartTime),
-      date: new Date().toLocaleString('ja-JP')
+      date: new Date().toLocaleString('ja-JP'),
+      notes: notesText // メモを保存
     };
 
     recordings.unshift(recording);
@@ -2497,11 +2741,12 @@
 
     for (const recording of recordings.slice(0, 5)) {
       const isPlaying = currentPlayingId === recording.id;
+      const hasNotes = recording.notes && recording.notes.trim();
       html += `
         <div class="rsc-recording-item" data-id="${recording.id}">
           <div class="rsc-recording-info">
             <span class="rsc-recording-name">${recording.name}</span>
-            <span class="rsc-recording-meta">${recording.duration}</span>
+            <span class="rsc-recording-meta">${recording.duration}${hasNotes ? ' 📝' : ''}</span>
           </div>
           <div class="rsc-recording-actions">
             <button class="rsc-recording-btn rsc-recording-play ${isPlaying ? 'playing' : ''}" data-id="${recording.id}" title="${isPlaying ? '停止' : '再生'}">
@@ -2512,11 +2757,15 @@
                 <path d="M6 6h12v12H6z"/>
               </svg>
             </button>
-            <button class="rsc-recording-btn rsc-recording-download" data-id="${recording.id}" title="ダウンロード">
+            <button class="rsc-recording-btn rsc-recording-download" data-id="${recording.id}" title="音声ダウンロード">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
               </svg>
             </button>
+            ${hasNotes ? `
+            <button class="rsc-recording-btn rsc-recording-notes-download" data-id="${recording.id}" title="メモダウンロード">📄</button>
+            <button class="rsc-recording-btn rsc-recording-notes-copy" data-id="${recording.id}" title="メモコピー">📋</button>
+            ` : ''}
             <button class="rsc-recording-btn rsc-recording-delete" data-id="${recording.id}" title="削除">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
@@ -2536,9 +2785,49 @@
     container.querySelectorAll('.rsc-recording-download').forEach(btn => {
       btn.addEventListener('click', () => downloadRecordingById(parseInt(btn.dataset.id)));
     });
+    container.querySelectorAll('.rsc-recording-notes-download').forEach(btn => {
+      btn.addEventListener('click', () => downloadNotesById(parseInt(btn.dataset.id)));
+    });
+    container.querySelectorAll('.rsc-recording-notes-copy').forEach(btn => {
+      btn.addEventListener('click', () => copyNotesById(parseInt(btn.dataset.id)));
+    });
     container.querySelectorAll('.rsc-recording-delete').forEach(btn => {
       btn.addEventListener('click', () => deleteRecordingById(parseInt(btn.dataset.id)));
     });
+  }
+
+  /**
+   * メモをダウンロード
+   */
+  function downloadNotesById(id) {
+    const recording = recordings.find(r => r.id === id);
+    if (!recording || !recording.notes) return;
+
+    const blob = new Blob([recording.notes], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${recording.name}_notes.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * メモをクリップボードにコピー
+   */
+  async function copyNotesById(id) {
+    const recording = recordings.find(r => r.id === id);
+    if (!recording || !recording.notes) return;
+
+    try {
+      await navigator.clipboard.writeText(recording.notes);
+      showTimerToast('メモをコピーしました');
+    } catch (e) {
+      console.error('[HandSign] Failed to copy notes:', e);
+      showTimerToast('コピーに失敗しました');
+    }
   }
 
   /**
