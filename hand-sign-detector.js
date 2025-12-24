@@ -1489,8 +1489,14 @@
             タブの音声を録音するには「タブの音声を共有」にチェックを入れてください
           </div>
 
-          <!-- 文字起こし・メモエリア -->
+          <!-- メモ・文字起こしエリア -->
           <div class="rsc-meeting-notes">
+            <div class="rsc-notes-section">
+              <div class="rsc-notes-header">
+                <span class="rsc-notes-title">✏️ メモ</span>
+              </div>
+              <textarea class="rsc-manual-notes" placeholder="メモを入力..."></textarea>
+            </div>
             <div class="rsc-notes-section">
               <div class="rsc-notes-header">
                 <span class="rsc-notes-title">📝 文字起こし</span>
@@ -1500,12 +1506,6 @@
                 </label>
               </div>
               <div class="rsc-transcript-area" contenteditable="false"></div>
-            </div>
-            <div class="rsc-notes-section">
-              <div class="rsc-notes-header">
-                <span class="rsc-notes-title">✏️ メモ</span>
-              </div>
-              <textarea class="rsc-manual-notes" placeholder="メモを入力..."></textarea>
             </div>
           </div>
 
