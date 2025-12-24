@@ -1642,33 +1642,34 @@
         top: 0;
         left: 0;
         width: 100%;
-        height: 100%;
+        height: 50%;
         z-index: 999999;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
       #rsc-tools-modal.rsc-active {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        padding-top: 10px;
       }
       .rsc-modal-overlay {
-        position: absolute;
+        position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.7);
+        background: rgba(0, 0, 0, 0.5);
       }
       .rsc-modal-dialog {
         position: relative;
         background: #1a1a2e;
-        border-radius: 16px;
+        border-radius: 12px;
         padding: 0;
-        max-width: 720px;
-        width: 95%;
-        max-height: 95vh;
+        max-width: 600px;
+        width: 90%;
+        max-height: calc(50vh - 30px);
         overflow: hidden;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
       }
       .rsc-modal-header {
         display: flex;
@@ -1705,8 +1706,8 @@
       }
       .rsc-tab-content {
         display: none;
-        padding: 20px;
-        max-height: calc(95vh - 70px);
+        padding: 16px;
+        max-height: calc(50vh - 100px);
         overflow-y: auto;
       }
       .rsc-tab-content.active {
