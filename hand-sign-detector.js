@@ -3102,6 +3102,11 @@
           color: #fff;
           font-size: 14px;
         }
+        .rsc-hs-sound-select option,
+        .rsc-hs-sound-select optgroup {
+          background: #2d2d2d;
+          color: #fff;
+        }
         .rsc-hs-sound-btn {
           width: 36px;
           height: 36px;
