@@ -120,6 +120,7 @@
           <span class="rsc-timer-label">次の撮影まで</span>
           <span class="rsc-timer-value">5:00</span>
         </div>
+        <span class="rsc-countdown-badge">🔇OFF</span>
       </div>
       <div class="rsc-timer-rows">
         <div class="rsc-timer-row">
@@ -181,22 +182,17 @@
         .rsc-timer-main:hover {
           background: rgba(255,255,255,0.1);
         }
-        .rsc-timer-main.rsc-countdown-enabled {
-          background: rgba(72, 187, 120, 0.25);
-          box-shadow: inset 0 0 0 1px rgba(72, 187, 120, 0.5);
-        }
-        .rsc-timer-main.rsc-countdown-enabled:hover {
-          background: rgba(72, 187, 120, 0.35);
-        }
-        .rsc-timer-main .rsc-timer-icon {
-          position: relative;
-        }
-        .rsc-timer-main.rsc-countdown-enabled .rsc-timer-icon::after {
-          content: '🔊';
+        .rsc-countdown-badge {
           font-size: 10px;
-          position: absolute;
-          bottom: -4px;
-          right: -6px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(255,255,255,0.15);
+          color: #a0aec0;
+          margin-left: 4px;
+        }
+        .rsc-timer-main.rsc-countdown-enabled .rsc-countdown-badge {
+          background: rgba(72, 187, 120, 0.3);
+          color: #68d391;
         }
         .rsc-timer-rows {
           display: flex;
@@ -467,11 +463,14 @@
    */
   function updateCountdownSoundIndicator() {
     const timerMain = timerElement?.querySelector('.rsc-timer-main');
-    if (timerMain) {
+    const badge = timerElement?.querySelector('.rsc-countdown-badge');
+    if (timerMain && badge) {
       if (settings.countdown?.enabled) {
         timerMain.classList.add('rsc-countdown-enabled');
+        badge.textContent = '🔊ON';
       } else {
         timerMain.classList.remove('rsc-countdown-enabled');
+        badge.textContent = '🔇OFF';
       }
     }
   }
