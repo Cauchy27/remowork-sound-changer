@@ -107,6 +107,14 @@ const PRESET_SOUNDS = {
     { id: 'doorchime_notify', file: 'メッセージが来てるよ.mp3', label: 'メッセージが来てるよ' },
     { id: 'doorchime_mail', file: 'メールだよ.mp3', label: 'メールだよ' },
     { id: 'doorchime_taiko', file: '和太鼓でカカッ.mp3', label: '和太鼓でカカッ' }
+  ],
+  countdown: [
+    { id: 'countdown_button2', file: '決定ボタンを押す2.mp3', label: 'ボタンを押す音2' },
+    { id: 'countdown_button9', file: '決定ボタンを押す9.mp3', label: 'ボタンを押す音9' },
+    { id: 'countdown_cat1', file: '猫の鳴き声1.mp3', label: '猫の鳴き声1' },
+    { id: 'countdown_cat2', file: '猫の鳴き声2.mp3', label: '猫の鳴き声2' },
+    { id: 'countdown_cat3', file: '猫の鳴き声3.mp3', label: '猫の鳴き声3' },
+    { id: 'countdown_none', file: null, label: 'なし（無音）' }
   ]
 };
 

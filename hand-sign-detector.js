@@ -172,6 +172,24 @@
           display: flex;
           align-items: center;
           gap: 10px;
+          cursor: pointer;
+          border-radius: 6px;
+          padding: 4px;
+          margin: -4px;
+          transition: background 0.2s;
+        }
+        .rsc-timer-main:hover {
+          background: rgba(255,255,255,0.1);
+        }
+        .rsc-timer-main .rsc-timer-icon {
+          position: relative;
+        }
+        .rsc-timer-main.rsc-countdown-enabled .rsc-timer-icon::after {
+          content: '🔊';
+          font-size: 10px;
+          position: absolute;
+          bottom: -4px;
+          right: -6px;
         }
         .rsc-timer-rows {
           display: flex;
@@ -413,6 +431,42 @@
         openSoundSettingsModal();
       });
     }
+
+    // タイマーメイン（カウントダウン音ON/OFF）
+    const timerMain = timerElement.querySelector('.rsc-timer-main');
+    if (timerMain) {
+      timerMain.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleCountdownSound();
+      });
+      // 初期状態を設定
+      updateCountdownSoundIndicator();
+    }
+  }
+
+  /**
+   * カウントダウン音ON/OFF切り替え
+   */
+  async function toggleCountdownSound() {
+    settings.countdown = settings.countdown || {};
+    settings.countdown.enabled = !settings.countdown.enabled;
+    await chrome.storage.local.set({ handSignSettings: settings });
+    updateCountdownSoundIndicator();
+    showTimerToast(settings.countdown.enabled ? 'カウントダウン音 ON' : 'カウントダウン音 OFF');
+  }
+
+  /**
+   * カウントダウン音の表示インジケーター更新
+   */
+  function updateCountdownSoundIndicator() {
+    const timerMain = timerElement?.querySelector('.rsc-timer-main');
+    if (timerMain) {
+      if (settings.countdown?.enabled) {
+        timerMain.classList.add('rsc-countdown-enabled');
+      } else {
+        timerMain.classList.remove('rsc-countdown-enabled');
+      }
+    }
   }
 
   // ドラッグ関連の変数
@@ -446,8 +500,8 @@
    * ドラッグ開始
    */
   function onDragStart(e) {
-    // ボタンクリックは除外
-    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-notify-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-start-btn') || e.target.closest('.rsc-record-stop-btn') || e.target.closest('.rsc-record-end-btn') || e.target.closest('.rsc-sound-btn')) return;
+    // ボタンクリックは除外（タイマーメインのクリックも含む）
+    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-notify-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-start-btn') || e.target.closest('.rsc-record-stop-btn') || e.target.closest('.rsc-record-end-btn') || e.target.closest('.rsc-sound-btn') || e.target.closest('.rsc-timer-main')) return;
 
     isDragging = true;
     timerElement.classList.add('rsc-dragging');
@@ -1017,12 +1071,45 @@
   }
 
   /**
+   * カウントダウン音を再生
+   */
+  async function playCountdownSound() {
+    if (!settings.countdown?.enabled) return;
+
+    const soundPreset = settings.countdown?.soundPreset || 'countdown:countdown_button2';
+    const [category, presetId] = soundPreset.split(':');
+
+    // 無音の場合はスキップ
+    if (presetId === 'countdown_none') return;
+
+    try {
+      const presets = presetSounds[category];
+      if (presets) {
+        const preset = presets.find(p => p.id === presetId);
+        if (preset && preset.file) {
+          const soundUrl = chrome.runtime.getURL(`sounds/${category}/${preset.file}`);
+          const audio = new Audio(soundUrl);
+          audio.volume = 0.6;
+          await audio.play();
+        }
+      }
+    } catch (error) {
+      console.error('[HandSign] Failed to play countdown sound:', error);
+    }
+  }
+
+  /**
    * タイマーを1秒減らす
    */
   function tickTimer() {
     if (remainingSeconds > 0) {
       remainingSeconds--;
       updateTimerDisplay();
+
+      // 5秒以下でカウントダウン音を再生
+      if (remainingSeconds <= 5 && remainingSeconds > 0) {
+        playCountdownSound();
+      }
     }
   }
 
@@ -3578,6 +3665,23 @@
       </div>
     `;
 
+    // カウントダウン音設定
+    const countdownPresets = presetSounds.countdown || [];
+    const currentCountdown = settings.countdown?.soundPreset || 'countdown:countdown_button2';
+    html += `
+      <div class="rsc-sound-notification">
+        <div class="rsc-sound-notification-title">⏱️ 撮影5秒前カウントダウン音</div>
+        <div class="rsc-sound-item" data-type="countdown">
+          <div class="rsc-sound-select-row">
+            <select class="rsc-sound-select" data-type="countdown">
+              ${countdownPresets.map(p => `<option value="countdown:${p.id}"${currentCountdown === `countdown:${p.id}` ? ' selected' : ''}>${p.label}</option>`).join('')}
+            </select>
+            <button class="rsc-sound-play-btn" data-type="countdown" title="試聴">▶</button>
+          </div>
+        </div>
+      </div>
+    `;
+
     content.innerHTML = html;
 
     // イベントハンドラー
@@ -3641,6 +3745,12 @@
         settings.notifications.soundPreset = value;
         await chrome.storage.local.set({ handSignSettings: settings });
         showTimerToast('通知音を変更しました');
+      } else if (type === 'countdown') {
+        // カウントダウン音設定
+        settings.countdown = settings.countdown || {};
+        settings.countdown.soundPreset = value;
+        await chrome.storage.local.set({ handSignSettings: settings });
+        showTimerToast('カウントダウン音を変更しました');
       } else {
         // 通常の音声設定
         if (value === 'original') {
@@ -3675,14 +3785,18 @@
     try {
       let soundUrl = null;
 
-      if (type === 'notification') {
-        // 通知音
+      if (type === 'notification' || type === 'countdown') {
+        // 通知音・カウントダウン音
         const [category, presetId] = value.split(':');
         const presets = presetSounds[category];
         if (presets) {
           const preset = presets.find(p => p.id === presetId);
-          if (preset) {
+          if (preset && preset.file) {
             soundUrl = chrome.runtime.getURL(`sounds/${category}/${preset.file}`);
+          } else if (preset && !preset.file) {
+            // なし（無音）の場合
+            showTimerToast('無音が設定されています');
+            return;
           }
         }
       } else if (value === 'original') {
