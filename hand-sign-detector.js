@@ -130,6 +130,7 @@
       <div class="rsc-timer-divider"></div>
       <button class="rsc-tools-btn" title="事前撮影">📸 事前撮影</button>
       <button class="rsc-record-btn" title="録音">🎙️</button>
+      <button class="rsc-sound-btn" title="音声設定">🔊</button>
       <button class="rsc-test-btn" title="通知テスト">🔔</button>
     `;
 
@@ -297,6 +298,23 @@
           background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
           transform: scale(1.1);
         }
+        .rsc-sound-btn {
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 6px;
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .rsc-sound-btn:hover {
+          background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+          transform: scale(1.1);
+        }
         .rsc-test-btn {
           width: 32px;
           height: 32px;
@@ -354,6 +372,15 @@
         openToolsModal('recorder');
       });
     }
+
+    // 音声設定ボタン
+    const soundBtn = timerElement.querySelector('.rsc-sound-btn');
+    if (soundBtn) {
+      soundBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSoundSettingsModal();
+      });
+    }
   }
 
   // ドラッグ関連の変数
@@ -388,7 +415,7 @@
    */
   function onDragStart(e) {
     // ボタンクリックは除外
-    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-test-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-btn')) return;
+    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-test-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-btn') || e.target.closest('.rsc-sound-btn')) return;
 
     isDragging = true;
     timerElement.classList.add('rsc-dragging');
@@ -2494,6 +2521,392 @@
       startTimer();
     }
     console.log('[HandSign] Widgets shown (logged in)');
+  }
+
+  // ===== 音声設定モーダル =====
+
+  let soundSettingsModal = null;
+  let presetSounds = null;
+  let soundSettings = null;
+
+  const SOUND_LABELS = {
+    calling: '発信中（呼び出し音）',
+    incoming: '着信音',
+    outgoing: '発信音',
+    disconnect: '切断音',
+    doorchime: 'ドアチャイム'
+  };
+
+  /**
+   * 音声設定モーダルを作成
+   */
+  function createSoundSettingsModal() {
+    if (soundSettingsModal) return soundSettingsModal;
+
+    soundSettingsModal = document.createElement('div');
+    soundSettingsModal.id = 'rsc-sound-settings-modal';
+    soundSettingsModal.innerHTML = `
+      <div class="rsc-modal-overlay"></div>
+      <div class="rsc-modal-dialog rsc-sound-dialog">
+        <div class="rsc-modal-header">
+          <div class="rsc-modal-title">🔊 音声設定</div>
+          <button class="rsc-modal-close">×</button>
+        </div>
+        <div class="rsc-sound-settings-content">
+          <div class="rsc-sound-loading">読み込み中...</div>
+        </div>
+      </div>
+    `;
+
+    // スタイルを追加
+    if (!document.getElementById('rsc-sound-settings-styles')) {
+      const style = document.createElement('style');
+      style.id = 'rsc-sound-settings-styles';
+      style.textContent = `
+        #rsc-sound-settings-modal {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          z-index: 999999;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #rsc-sound-settings-modal.rsc-active {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .rsc-sound-dialog {
+          max-width: 600px !important;
+        }
+        .rsc-sound-settings-content {
+          padding: 20px;
+          max-height: calc(95vh - 70px);
+          overflow-y: auto;
+        }
+        .rsc-sound-loading {
+          text-align: center;
+          color: #a0aec0;
+          padding: 40px;
+        }
+        .rsc-sound-item {
+          background: rgba(255,255,255,0.05);
+          border-radius: 10px;
+          padding: 16px;
+          margin-bottom: 12px;
+        }
+        .rsc-sound-item:last-child {
+          margin-bottom: 0;
+        }
+        .rsc-sound-item-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .rsc-sound-item-label {
+          color: #fff;
+          font-size: 14px;
+          font-weight: 500;
+        }
+        .rsc-sound-item-mode {
+          color: #a0aec0;
+          font-size: 12px;
+          padding: 4px 8px;
+          background: rgba(255,255,255,0.1);
+          border-radius: 4px;
+        }
+        .rsc-sound-select-row {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .rsc-sound-select {
+          flex: 1;
+          padding: 10px 12px;
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 8px;
+          background: rgba(255,255,255,0.1);
+          color: #fff;
+          font-size: 14px;
+          cursor: pointer;
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a0aec0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+        }
+        .rsc-sound-select:focus {
+          outline: none;
+          border-color: #667eea;
+        }
+        .rsc-sound-select option {
+          background: #1a1a2e;
+          color: #fff;
+        }
+        .rsc-sound-play-btn {
+          width: 40px;
+          height: 40px;
+          border: none;
+          border-radius: 8px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: #fff;
+          font-size: 16px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .rsc-sound-play-btn:hover {
+          transform: scale(1.05);
+        }
+        .rsc-sound-play-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .rsc-sound-notification {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .rsc-sound-notification-title {
+          color: #fff;
+          font-size: 14px;
+          font-weight: 500;
+          margin-bottom: 12px;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(soundSettingsModal);
+
+    // イベント設定
+    soundSettingsModal.querySelector('.rsc-modal-overlay').addEventListener('click', closeSoundSettingsModal);
+    soundSettingsModal.querySelector('.rsc-modal-close').addEventListener('click', closeSoundSettingsModal);
+
+    return soundSettingsModal;
+  }
+
+  /**
+   * 音声設定モーダルを開く
+   */
+  async function openSoundSettingsModal() {
+    createSoundSettingsModal();
+    soundSettingsModal.classList.add('rsc-active');
+
+    // データを読み込み
+    await loadSoundSettingsData();
+    renderSoundSettings();
+  }
+
+  /**
+   * 音声設定モーダルを閉じる
+   */
+  function closeSoundSettingsModal() {
+    if (soundSettingsModal) {
+      soundSettingsModal.classList.remove('rsc-active');
+    }
+  }
+
+  /**
+   * 音声設定データを読み込む
+   */
+  async function loadSoundSettingsData() {
+    try {
+      // プリセット音声を取得
+      const presetsResponse = await chrome.runtime.sendMessage({ type: 'GET_PRESET_SOUNDS' });
+      if (presetsResponse && presetsResponse.success) {
+        presetSounds = presetsResponse.data;
+      }
+
+      // 現在の設定を取得
+      const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
+      if (settingsResponse && settingsResponse.success) {
+        soundSettings = settingsResponse.data;
+      }
+    } catch (error) {
+      console.error('[HandSign] Failed to load sound settings:', error);
+    }
+  }
+
+  /**
+   * 音声設定UIをレンダリング
+   */
+  function renderSoundSettings() {
+    const content = soundSettingsModal.querySelector('.rsc-sound-settings-content');
+    if (!presetSounds) {
+      content.innerHTML = '<div class="rsc-sound-loading">音声データを読み込めませんでした</div>';
+      return;
+    }
+
+    let html = '';
+
+    // 各音声タイプ
+    const soundTypes = ['calling', 'incoming', 'outgoing', 'disconnect', 'doorchime'];
+    for (const type of soundTypes) {
+      const label = SOUND_LABELS[type];
+      const presets = presetSounds[type] || [];
+      const currentSetting = soundSettings?.sounds?.[type] || { mode: 'original' };
+      const currentMode = currentSetting.mode || 'original';
+      const currentPresetId = currentSetting.presetId || '';
+
+      html += `
+        <div class="rsc-sound-item" data-type="${type}">
+          <div class="rsc-sound-item-header">
+            <span class="rsc-sound-item-label">${label}</span>
+            <span class="rsc-sound-item-mode">${currentMode === 'original' ? 'オリジナル' : currentMode === 'preset' ? 'プリセット' : 'カスタム'}</span>
+          </div>
+          <div class="rsc-sound-select-row">
+            <select class="rsc-sound-select" data-type="${type}">
+              <option value="original"${currentMode === 'original' ? ' selected' : ''}>オリジナル</option>
+              <optgroup label="プリセット">
+                ${presets.map(p => `<option value="preset:${p.id}"${currentMode === 'preset' && currentPresetId === p.id ? ' selected' : ''}>${p.label}</option>`).join('')}
+              </optgroup>
+            </select>
+            <button class="rsc-sound-play-btn" data-type="${type}" title="試聴">▶</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // 通知音設定
+    html += `
+      <div class="rsc-sound-notification">
+        <div class="rsc-sound-notification-title">🔔 ハンドサイン検出時の通知音</div>
+        <div class="rsc-sound-item" data-type="notification">
+          <div class="rsc-sound-select-row">
+            <select class="rsc-sound-select" data-type="notification" id="rsc-notification-sound-select">
+              ${renderNotificationOptions()}
+            </select>
+            <button class="rsc-sound-play-btn" data-type="notification" title="試聴">▶</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    content.innerHTML = html;
+
+    // イベントハンドラー
+    content.querySelectorAll('.rsc-sound-select').forEach(select => {
+      select.addEventListener('change', handleSoundChange);
+    });
+    content.querySelectorAll('.rsc-sound-play-btn').forEach(btn => {
+      btn.addEventListener('click', handleSoundPreview);
+    });
+  }
+
+  /**
+   * 通知音オプションをレンダリング
+   */
+  function renderNotificationOptions() {
+    const currentPreset = settings.notifications?.soundPreset || 'outgoing:outgoing_horn';
+    let options = '';
+
+    const categoryLabels = {
+      outgoing: '発信音',
+      incoming: '着信音',
+      disconnect: '切断音',
+      doorchime: 'ドアチャイム'
+    };
+
+    for (const [category, sounds] of Object.entries(presetSounds || {})) {
+      if (category === 'calling') continue; // 呼び出し音は通知には不向き
+      const label = categoryLabels[category] || category;
+      options += `<optgroup label="${label}">`;
+      for (const sound of sounds) {
+        const value = `${category}:${sound.id}`;
+        const selected = currentPreset === value ? ' selected' : '';
+        options += `<option value="${value}"${selected}>${sound.label}</option>`;
+      }
+      options += '</optgroup>';
+    }
+
+    return options;
+  }
+
+  /**
+   * 音声変更ハンドラー
+   */
+  async function handleSoundChange(e) {
+    const type = e.target.dataset.type;
+    const value = e.target.value;
+
+    try {
+      if (type === 'notification') {
+        // 通知音設定
+        settings.notifications = settings.notifications || {};
+        settings.notifications.soundPreset = value;
+        await chrome.storage.local.set({ handSignSettings: settings });
+        showTimerToast('通知音を変更しました');
+      } else {
+        // 通常の音声設定
+        if (value === 'original') {
+          await chrome.runtime.sendMessage({ type: 'SET_ORIGINAL', id: type });
+        } else if (value.startsWith('preset:')) {
+          const presetId = value.replace('preset:', '');
+          await chrome.runtime.sendMessage({ type: 'SET_PRESET', id: type, presetId });
+        }
+
+        // モード表示を更新
+        const item = e.target.closest('.rsc-sound-item');
+        const modeSpan = item.querySelector('.rsc-sound-item-mode');
+        if (modeSpan) {
+          modeSpan.textContent = value === 'original' ? 'オリジナル' : 'プリセット';
+        }
+        showTimerToast('音声を変更しました');
+      }
+    } catch (error) {
+      console.error('[HandSign] Failed to change sound:', error);
+      showTimerToast('音声の変更に失敗しました');
+    }
+  }
+
+  /**
+   * 試聴ハンドラー
+   */
+  async function handleSoundPreview(e) {
+    const type = e.target.closest('.rsc-sound-play-btn').dataset.type;
+    const select = soundSettingsModal.querySelector(`.rsc-sound-select[data-type="${type}"]`);
+    const value = select.value;
+
+    try {
+      let soundUrl = null;
+
+      if (type === 'notification') {
+        // 通知音
+        const [category, presetId] = value.split(':');
+        const presets = presetSounds[category];
+        if (presets) {
+          const preset = presets.find(p => p.id === presetId);
+          if (preset) {
+            soundUrl = chrome.runtime.getURL(`sounds/${category}/${preset.file}`);
+          }
+        }
+      } else if (value === 'original') {
+        showTimerToast('オリジナル音はRemowork上で再生されます');
+        return;
+      } else if (value.startsWith('preset:')) {
+        const presetId = value.replace('preset:', '');
+        const presets = presetSounds[type];
+        if (presets) {
+          const preset = presets.find(p => p.id === presetId);
+          if (preset) {
+            soundUrl = chrome.runtime.getURL(`sounds/${type}/${preset.file}`);
+          }
+        }
+      }
+
+      if (soundUrl) {
+        const audio = new Audio(soundUrl);
+        audio.volume = 0.7;
+        await audio.play();
+      }
+    } catch (error) {
+      console.error('[HandSign] Failed to preview sound:', error);
+    }
   }
 
   /**
