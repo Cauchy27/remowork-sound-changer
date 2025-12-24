@@ -2567,6 +2567,11 @@
     }
   }
 
+  // 文字起こしリトライ管理
+  let transcriptionRetryCount = 0;
+  const MAX_TRANSCRIPTION_RETRIES = 3;
+  let transcriptionHasNetworkError = false;
+
   /**
    * 文字起こしを開始（Web Speech API）
    */
@@ -2574,6 +2579,7 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn('[HandSign] Web Speech API not supported');
+      updateTranscriptDisplay('（このブラウザは文字起こしに対応していません）');
       return;
     }
 
@@ -2584,6 +2590,8 @@
 
     transcriptText = '';
     isTranscribing = true;
+    transcriptionRetryCount = 0;
+    transcriptionHasNetworkError = false;
 
     speechRecognition = new SpeechRecognition();
     speechRecognition.continuous = true;
@@ -2591,6 +2599,10 @@
     speechRecognition.lang = 'ja-JP';
 
     speechRecognition.onresult = (event) => {
+      // 成功したらリトライカウントをリセット
+      transcriptionRetryCount = 0;
+      transcriptionHasNetworkError = false;
+
       let interimTranscript = '';
       let finalTranscript = '';
 
@@ -2612,10 +2624,23 @@
 
     speechRecognition.onerror = (event) => {
       console.warn('[HandSign] Speech recognition error:', event.error);
-      if (event.error === 'no-speech' && isTranscribing) {
-        // 無音の場合は再起動
+
+      if (event.error === 'network') {
+        // ネットワークエラー：再起動しない
+        transcriptionHasNetworkError = true;
+        updateTranscriptDisplay('（ネットワークエラー：文字起こし利用不可）\n\n手動でメモを入力してください。');
+        return;
+      }
+
+      if (event.error === 'not-allowed') {
+        updateTranscriptDisplay('（マイクへのアクセスが拒否されました）');
+        return;
+      }
+
+      if (event.error === 'no-speech' && isTranscribing && !transcriptionHasNetworkError) {
+        // 無音の場合は再起動（リトライ制限なし - これは正常動作）
         setTimeout(() => {
-          if (isTranscribing) {
+          if (isTranscribing && speechRecognition) {
             try {
               speechRecognition.start();
             } catch (e) {}
@@ -2625,8 +2650,20 @@
     };
 
     speechRecognition.onend = () => {
-      // 録音中なら再開
+      // ネットワークエラーが発生していたら再起動しない
+      if (transcriptionHasNetworkError) {
+        return;
+      }
+
+      // 録音中かつリトライ回数内なら再開
       if (isTranscribing) {
+        transcriptionRetryCount++;
+        if (transcriptionRetryCount > MAX_TRANSCRIPTION_RETRIES) {
+          console.warn('[HandSign] Transcription max retries reached, stopping');
+          updateTranscriptDisplay(transcriptText + '\n（文字起こしが停止しました）');
+          return;
+        }
+
         try {
           speechRecognition.start();
         } catch (e) {}
@@ -2638,6 +2675,7 @@
       console.log('[HandSign] Transcription started');
     } catch (e) {
       console.error('[HandSign] Failed to start transcription:', e);
+      updateTranscriptDisplay('（文字起こしを開始できませんでした）');
     }
   }
 
