@@ -788,18 +788,23 @@
     }
   }
 
+  // 現在の録音用ストリーム（停止時に解放するため保持）
+  let currentRecordingStream = null;
+
   /**
-   * タイマーUIから録音開始
+   * タイマーUIから録音開始（マイクのみ）
    */
   async function startRecordingFromTimer() {
     try {
-      const stream = await captureAudioStream();
+      // マイクのみを使用（画面共有なし）
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       if (!stream) {
-        showTimerToast('音声ストリームを取得できませんでした');
+        showTimerToast('マイクにアクセスできませんでした');
         return;
       }
 
+      currentRecordingStream = stream;
       audioChunks = [];
       recordingStartTime = Date.now();
 
@@ -816,11 +821,16 @@
       mediaRecorder.onstop = () => {
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
         saveRecordingData(blob);
+        // ストリームを解放
+        releaseRecordingStream();
         // 録音終了時にモーダルを開く
         openToolsModal('recorder');
       };
 
       mediaRecorder.start(1000);
+
+      // 文字起こしを開始
+      startTranscription();
 
       // タイマーUI更新
       updateTimerRecordButtons('recording');
@@ -828,11 +838,30 @@
       // 録音画面を開く
       openToolsModal('recorder');
 
-      console.log('[HandSign] Recording started from timer');
+      console.log('[HandSign] Recording started from timer (mic only)');
 
     } catch (error) {
       console.error('[HandSign] Failed to start recording:', error);
       showTimerToast('録音を開始できませんでした');
+    }
+  }
+
+  /**
+   * 録音用ストリームを解放
+   */
+  function releaseRecordingStream() {
+    if (currentRecordingStream) {
+      // 複数ストリームの場合
+      if (currentRecordingStream.streams) {
+        currentRecordingStream.streams.forEach(stream => {
+          stream.getTracks().forEach(track => track.stop());
+        });
+      } else {
+        // 単一ストリームの場合
+        currentRecordingStream.getTracks().forEach(track => track.stop());
+      }
+      currentRecordingStream = null;
+      console.log('[HandSign] Recording stream released');
     }
   }
 
@@ -858,7 +887,9 @@
    */
   function stopRecordingFromTimer() {
     if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
+      stopTranscription();
       mediaRecorder.stop();
+      // ストリーム解放はonstopで行われる
       updateTimerRecordButtons('idle');
       showTimerToast('録音を終了しました');
     }
@@ -2481,9 +2512,13 @@
       let hasMic = false;
       let hasTabAudio = false;
 
+      // ストリームを保持するリスト
+      const streamsToRelease = [];
+
       // マイク
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamsToRelease.push(micStream);
         const micSource = audioContext.createMediaStreamSource(micStream);
         micSource.connect(audioDestination);
         hasMic = true;
@@ -2508,6 +2543,8 @@
           systemAudio: 'include'
         });
 
+        streamsToRelease.push(displayStream);
+
         const audioTracks = displayStream.getAudioTracks();
 
         if (audioTracks.length > 0) {
@@ -2523,6 +2560,9 @@
       } catch (e) {
         console.warn('[HandSign] Tab audio capture failed:', e);
       }
+
+      // ストリームを保持（停止時に解放するため）
+      currentRecordingStream = { streams: streamsToRelease };
 
       if (!hasMic && !hasTabAudio) {
         throw new Error('音声ソースが見つかりません');
@@ -2566,6 +2606,7 @@
       mediaRecorder.stop();
       stopRecorderTimer();
       stopTranscription();
+      releaseRecordingStream();
       updateRecorderUI('idle');
     }
   }
