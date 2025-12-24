@@ -35,12 +35,6 @@ const SOUND_TYPES = {
     path: '/client/doorchime.mp3',
     paths: ['/client/doorchime.mp3', '/sounds/doorchime.mp3', '/audio/doorchime.mp3', '/client/chime.mp3', '/client/notification.mp3'],
     label: 'ドアチャイム'
-  },
-  // デバイス設定用テスト音声
-  test: {
-    path: '/client/test.mp3',
-    paths: ['/client/test.mp3', '/sounds/test.mp3', '/audio/test.mp3', '/client/speaker-test.mp3'],
-    label: 'テスト音声（デバイス設定）'
   }
 };
 
@@ -113,9 +107,7 @@ const PRESET_SOUNDS = {
     { id: 'doorchime_notify', file: 'メッセージが来てるよ.mp3', label: 'メッセージが来てるよ' },
     { id: 'doorchime_mail', file: 'メールだよ.mp3', label: 'メールだよ' },
     { id: 'doorchime_taiko', file: '和太鼓でカカッ.mp3', label: '和太鼓でカカッ' }
-  ],
-  // テスト音声は着信音と同じプリセットを使用
-  test: []
+  ]
 };
 
 /**
