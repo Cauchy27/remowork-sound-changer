@@ -1,0 +1,46 @@
+MIT License
+
+Copyright (c) 2024
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Sound Files Notice
+
+Sound files are NOT included in this repository due to licensing restrictions.
+To use preset sounds, you need to add your own sound files to the `sounds/` directory.
+
+### Directory Structure
+
+```
+sounds/
+├── calling/      # 発信中（呼び出し音）
+├── incoming/     # 着信音
+├── outgoing/     # 発信音
+├── disconnect/   # 切断音
+└── doorchime/    # ドアチャイム
+```
+
+You can download free sound effects from sites like:
+- [効果音ラボ](https://soundeffect-lab.info/)
+- [魔王魂](https://maou.audio/)
+- [DOVA-SYNDROME](https://dova-s.jp/)
+
+Please check each site's terms of use before using their sounds.

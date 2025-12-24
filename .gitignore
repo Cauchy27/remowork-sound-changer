@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Sound files (cannot be redistributed due to licensing)
+sounds/
