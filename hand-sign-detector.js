@@ -128,9 +128,7 @@
           <button class="rsc-send-btn" data-type="thumbsup" title="👍を次回送信">👍</button>
           <button class="rsc-away-btn" title="留守モード（30分間自動送信）">🏃 留守</button>
           <div class="rsc-timer-divider"></div>
-          <button class="rsc-record-start-btn" title="録音開始">🔴 録音</button>
-          <button class="rsc-record-stop-btn" title="録音停止" style="display:none;">⏸️ 停止</button>
-          <button class="rsc-record-end-btn" title="録音終了" style="display:none;">⏹️ 終了</button>
+          <button class="rsc-record-btn" title="録音">🎙️ 録音</button>
         </div>
         <div class="rsc-timer-row">
           <button class="rsc-tools-btn" title="事前撮影">📸 事前撮影</button>
@@ -356,9 +354,7 @@
           background: rgba(255,255,255,0.3);
           margin: 0 4px;
         }
-        .rsc-record-start-btn,
-        .rsc-record-stop-btn,
-        .rsc-record-end-btn {
+        .rsc-record-btn {
           height: 32px;
           padding: 0 10px;
           border: none;
@@ -372,26 +368,10 @@
           justify-content: center;
           gap: 4px;
           white-space: nowrap;
-        }
-        .rsc-record-start-btn {
           background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
         }
-        .rsc-record-start-btn:hover {
+        .rsc-record-btn:hover {
           background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
-          transform: scale(1.05);
-        }
-        .rsc-record-stop-btn {
-          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        }
-        .rsc-record-stop-btn:hover {
-          background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-          transform: scale(1.05);
-        }
-        .rsc-record-end-btn {
-          background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
-        }
-        .rsc-record-end-btn:hover {
-          background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
           transform: scale(1.05);
         }
       `;
@@ -507,7 +487,7 @@
    */
   function onDragStart(e) {
     // ボタンクリックは除外（タイマーメインのクリックも含む）
-    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-notify-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-start-btn') || e.target.closest('.rsc-record-stop-btn') || e.target.closest('.rsc-record-end-btn') || e.target.closest('.rsc-sound-btn') || e.target.closest('.rsc-timer-main')) return;
+    if (e.target.closest('.rsc-send-btn') || e.target.closest('.rsc-notify-btn') || e.target.closest('.rsc-tools-btn') || e.target.closest('.rsc-away-btn') || e.target.closest('.rsc-record-btn') || e.target.closest('.rsc-sound-btn') || e.target.closest('.rsc-timer-main')) return;
 
     isDragging = true;
     timerElement.classList.add('rsc-dragging');
@@ -762,89 +742,18 @@
    * タイマーUIの録音ボタンをセットアップ
    */
   function setupTimerRecordButtons() {
-    const startBtn = timerElement.querySelector('.rsc-record-start-btn');
-    const stopBtn = timerElement.querySelector('.rsc-record-stop-btn');
-    const endBtn = timerElement.querySelector('.rsc-record-end-btn');
+    const recordBtn = timerElement.querySelector('.rsc-record-btn');
 
-    if (startBtn) {
-      startBtn.addEventListener('click', async (e) => {
+    if (recordBtn) {
+      recordBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        await startRecordingFromTimer();
-      });
-    }
-
-    if (stopBtn) {
-      stopBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePauseRecordingFromTimer();
-      });
-    }
-
-    if (endBtn) {
-      endBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        stopRecordingFromTimer();
+        openToolsModal('recorder');
       });
     }
   }
 
   // 現在の録音用ストリーム（停止時に解放するため保持）
   let currentRecordingStream = null;
-
-  /**
-   * タイマーUIから録音開始（マイクのみ）
-   */
-  async function startRecordingFromTimer() {
-    try {
-      // マイクのみを使用（画面共有なし）
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      if (!stream) {
-        showTimerToast('マイクにアクセスできませんでした');
-        return;
-      }
-
-      currentRecordingStream = stream;
-      audioChunks = [];
-      recordingStartTime = Date.now();
-
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        saveRecordingData(blob);
-        // ストリームを解放
-        releaseRecordingStream();
-        // 録音終了時にモーダルを開く
-        openToolsModal('recorder');
-      };
-
-      mediaRecorder.start(1000);
-
-      // 文字起こしを開始
-      startTranscription();
-
-      // タイマーUI更新
-      updateTimerRecordButtons('recording');
-
-      // 録音画面を開く
-      openToolsModal('recorder');
-
-      console.log('[HandSign] Recording started from timer (mic only)');
-
-    } catch (error) {
-      console.error('[HandSign] Failed to start recording:', error);
-      showTimerToast('録音を開始できませんでした');
-    }
-  }
 
   /**
    * 録音用ストリームを解放
@@ -862,63 +771,6 @@
       }
       currentRecordingStream = null;
       console.log('[HandSign] Recording stream released');
-    }
-  }
-
-  /**
-   * タイマーUIから一時停止/再開
-   */
-  function togglePauseRecordingFromTimer() {
-    if (!mediaRecorder) return;
-
-    if (mediaRecorder.state === 'recording') {
-      mediaRecorder.pause();
-      updateTimerRecordButtons('paused');
-      showTimerToast('録音を一時停止しました');
-    } else if (mediaRecorder.state === 'paused') {
-      mediaRecorder.resume();
-      updateTimerRecordButtons('recording');
-      showTimerToast('録音を再開しました');
-    }
-  }
-
-  /**
-   * タイマーUIから録音停止
-   */
-  function stopRecordingFromTimer() {
-    if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
-      stopTranscription();
-      mediaRecorder.stop();
-      // ストリーム解放はonstopで行われる
-      updateTimerRecordButtons('idle');
-      showTimerToast('録音を終了しました');
-    }
-  }
-
-  /**
-   * タイマーUIの録音ボタン表示更新
-   */
-  function updateTimerRecordButtons(state) {
-    const startBtn = timerElement?.querySelector('.rsc-record-start-btn');
-    const stopBtn = timerElement?.querySelector('.rsc-record-stop-btn');
-    const endBtn = timerElement?.querySelector('.rsc-record-end-btn');
-
-    if (!startBtn || !stopBtn || !endBtn) return;
-
-    if (state === 'recording') {
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'flex';
-      stopBtn.innerHTML = '⏸️ 停止';
-      endBtn.style.display = 'flex';
-    } else if (state === 'paused') {
-      startBtn.style.display = 'none';
-      stopBtn.style.display = 'flex';
-      stopBtn.innerHTML = '▶️ 再開';
-      endBtn.style.display = 'flex';
-    } else {
-      startBtn.style.display = 'flex';
-      stopBtn.style.display = 'none';
-      endBtn.style.display = 'none';
     }
   }
 
