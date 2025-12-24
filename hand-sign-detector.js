@@ -1660,6 +1660,8 @@
 
           <div class="rsc-recorder-recordings"></div>
         </div>
+
+        <div class="rsc-modal-resize-handle"></div>
       </div>
     `;
 
@@ -1673,7 +1675,6 @@
         top: 0;
         left: 0;
         width: 100%;
-        height: 50%;
         z-index: 999999;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
@@ -1698,9 +1699,33 @@
         padding: 0;
         max-width: 600px;
         width: 90%;
-        max-height: calc(50vh - 30px);
         overflow: hidden;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        resize: vertical;
+        min-height: 200px;
+        max-height: 90vh;
+      }
+      .rsc-modal-resize-handle {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 12px;
+        background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.1));
+        cursor: ns-resize;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .rsc-modal-resize-handle::after {
+        content: '';
+        width: 40px;
+        height: 4px;
+        background: rgba(255,255,255,0.3);
+        border-radius: 2px;
+      }
+      .rsc-modal-resize-handle:hover::after {
+        background: rgba(255,255,255,0.5);
       }
       .rsc-modal-header {
         display: flex;
@@ -1738,8 +1763,9 @@
       .rsc-tab-content {
         display: none;
         padding: 16px;
-        max-height: calc(50vh - 100px);
+        padding-bottom: 24px;
         overflow-y: auto;
+        flex: 1;
       }
       .rsc-tab-content.active {
         display: block;
@@ -2314,6 +2340,85 @@
       startRecorderTimer();
       showRecorderInfo('録音中（マイク）');
     }
+
+    // 保存された高さを復元
+    restoreModalHeight();
+
+    // リサイズハンドルを設定
+    setupModalResize();
+  }
+
+  /**
+   * モーダルの高さを復元
+   */
+  function restoreModalHeight() {
+    chrome.storage.local.get(['modalHeight'], (result) => {
+      if (result.modalHeight) {
+        const dialog = toolsModal?.querySelector('.rsc-modal-dialog');
+        if (dialog) {
+          dialog.style.height = result.modalHeight + 'px';
+        }
+      } else {
+        // デフォルト高さ
+        const dialog = toolsModal?.querySelector('.rsc-modal-dialog');
+        if (dialog) {
+          dialog.style.height = '50vh';
+        }
+      }
+    });
+  }
+
+  /**
+   * モーダルのリサイズ機能をセットアップ
+   */
+  function setupModalResize() {
+    const dialog = toolsModal?.querySelector('.rsc-modal-dialog');
+    const resizeHandle = toolsModal?.querySelector('.rsc-modal-resize-handle');
+
+    if (!dialog || !resizeHandle) return;
+
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    const onMouseDown = (e) => {
+      isResizing = true;
+      startY = e.clientY || e.touches?.[0]?.clientY;
+      startHeight = dialog.offsetHeight;
+      e.preventDefault();
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.addEventListener('touchmove', onMouseMove);
+      document.addEventListener('touchend', onMouseUp);
+    };
+
+    const onMouseMove = (e) => {
+      if (!isResizing) return;
+
+      const clientY = e.clientY || e.touches?.[0]?.clientY;
+      const deltaY = clientY - startY;
+      const newHeight = Math.max(200, Math.min(window.innerHeight * 0.9, startHeight + deltaY));
+
+      dialog.style.height = newHeight + 'px';
+    };
+
+    const onMouseUp = () => {
+      if (!isResizing) return;
+
+      isResizing = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onMouseMove);
+      document.removeEventListener('touchend', onMouseUp);
+
+      // 高さを保存
+      const currentHeight = dialog.offsetHeight;
+      chrome.storage.local.set({ modalHeight: currentHeight });
+    };
+
+    resizeHandle.addEventListener('mousedown', onMouseDown);
+    resizeHandle.addEventListener('touchstart', onMouseDown);
   }
 
   /**
