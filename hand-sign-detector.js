@@ -130,7 +130,7 @@
       <div class="rsc-timer-divider"></div>
       <button class="rsc-tools-btn" title="事前撮影">📸 事前撮影</button>
       <button class="rsc-record-btn" title="録音">🎙️</button>
-      <button class="rsc-sound-btn" title="音声設定">🔊</button>
+      <button class="rsc-sound-btn" title="音声変更">🔊 音声変更</button>
       <button class="rsc-test-btn" title="通知テスト">🔔</button>
     `;
 
@@ -299,21 +299,24 @@
           transform: scale(1.1);
         }
         .rsc-sound-btn {
-          width: 32px;
           height: 32px;
+          padding: 0 12px;
           border: none;
           border-radius: 6px;
           background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-          font-size: 16px;
+          font-size: 13px;
+          color: #fff;
           cursor: pointer;
           transition: all 0.2s;
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 4px;
+          white-space: nowrap;
         }
         .rsc-sound-btn:hover {
           background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-          transform: scale(1.1);
+          transform: scale(1.05);
         }
         .rsc-test-btn {
           width: 32px;
@@ -2578,8 +2581,57 @@
           align-items: center;
           justify-content: center;
         }
-        .rsc-sound-dialog {
-          max-width: 600px !important;
+        #rsc-sound-settings-modal .rsc-modal-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.7);
+        }
+        #rsc-sound-settings-modal .rsc-modal-dialog {
+          position: relative;
+          background: #1a1a2e;
+          border-radius: 16px;
+          padding: 0;
+          max-width: 600px;
+          width: 95%;
+          max-height: 95vh;
+          overflow: hidden;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        #rsc-sound-settings-modal .rsc-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 20px;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+          background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+        }
+        #rsc-sound-settings-modal .rsc-modal-title {
+          color: #fff;
+          font-size: 16px;
+          font-weight: 500;
+        }
+        #rsc-sound-settings-modal .rsc-modal-close {
+          background: none;
+          border: none;
+          color: #888;
+          font-size: 28px;
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
+          width: 36px;
+          height: 36px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          transition: all 0.2s;
+        }
+        #rsc-sound-settings-modal .rsc-modal-close:hover {
+          color: #fff;
+          background: rgba(255,255,255,0.1);
         }
         .rsc-sound-settings-content {
           padding: 20px;
