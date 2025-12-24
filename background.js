@@ -294,6 +294,22 @@ async function handleMessage(message) {
       await saveHandSignSettings(message.settings);
       return { success: true };
 
+    case 'SAVE_NOTIFICATION_CUSTOM_SOUND':
+      // カスタム通知音を保存
+      await chrome.storage.local.set({
+        notificationCustomSound: {
+          data: message.data,
+          fileName: message.fileName,
+          mimeType: message.mimeType
+        }
+      });
+      return { success: true };
+
+    case 'DELETE_NOTIFICATION_CUSTOM_SOUND':
+      // カスタム通知音を削除
+      await chrome.storage.local.remove('notificationCustomSound');
+      return { success: true };
+
     case 'INIT_HAND_DETECTOR':
       // オフスクリーンでハンド検出器を初期化
       const initResult = await sendToOffscreen({ type: 'INIT_DETECTOR' });
@@ -411,11 +427,11 @@ async function playHandSignSound(presetType) {
 
     let soundUrl = null;
 
-    if (soundValue.startsWith('custom:')) {
-      // カスタム音声
-      const customData = handSignSettings.notifications?.customSoundData;
-      if (customData) {
-        soundUrl = customData; // Base64データをそのまま送る
+    if (soundValue === 'custom') {
+      // カスタム音声（storage.localから取得）
+      const result = await chrome.storage.local.get('notificationCustomSound');
+      if (result.notificationCustomSound?.data) {
+        soundUrl = result.notificationCustomSound.data; // Base64データをそのまま送る
       }
     } else if (soundValue.includes(':')) {
       // 新形式: category:presetId
