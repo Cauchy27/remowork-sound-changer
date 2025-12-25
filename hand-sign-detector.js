@@ -8,7 +8,7 @@
 
   const DETECTION_INTERVAL = 10000; // 10秒ごとにチェック（画像URL変更検知用）
   const NOTIFICATION_COOLDOWN = 300000; // 同じ人からの通知は5分間抑制
-  const PHOTO_INTERVAL = 290; // 写真撮影間隔（4分50秒）- Remoworkより少し早めにカウントダウン終了
+  const PHOTO_INTERVAL = 297; // 写真撮影間隔（4分57秒）- Remoworkより少し早めにカウントダウン終了
 
   // 検出済みの画像URLを記録（重複検出防止）
   const processedImages = new Map();
@@ -1066,14 +1066,16 @@
   }
 
   /**
-   * 自分の画像URL変更を監視
+   * 自分の画像URL変更を監視（残り10秒以下の時のみリセット）
    */
   function checkMyImageChange() {
     const currentUrl = getMyImageUrl();
     if (currentUrl && lastMyImageUrl && currentUrl !== lastMyImageUrl) {
-      // 画像が変わった = 写真が撮られた
-      console.log('[HandSign] My image changed, resetting timer');
-      resetTimer();
+      // 残り10秒以下の時のみリセット（再撮影などの通常サイクル外はスキップ）
+      if (remainingSeconds <= 10) {
+        console.log('[HandSign] My image changed within 10s margin, resetting timer');
+        resetTimer();
+      }
     }
     lastMyImageUrl = currentUrl;
   }
