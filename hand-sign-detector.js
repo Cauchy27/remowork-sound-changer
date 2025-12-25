@@ -1705,7 +1705,7 @@
                 </div>
               </div>
               <div class="rsc-mic-selector">
-                <label class="rsc-mic-label">🎤 入力デバイス:</label>
+                <label class="rsc-mic-label">🎤 自分のマイク:</label>
                 <select class="rsc-mic-select">
                   <option value="">読み込み中...</option>
                 </select>
