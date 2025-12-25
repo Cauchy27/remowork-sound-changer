@@ -112,6 +112,40 @@
   }
 
   /**
+   * Remoworkで自分が「離席中」かどうかを判定
+   * 離席中の場合はカメラ送信・カウントダウン音が不要
+   */
+  function isRemoworkAway() {
+    const loginUserContainer = document.querySelector('.user-picture-container.login-user');
+    if (!loginUserContainer) return false;
+
+    // 離席ステータスを示す要素を探す（複数パターン対応）
+    // パターン1: ステータステキスト
+    const statusText = loginUserContainer.querySelector('.user-status, .status-text, [class*="status"]');
+    if (statusText) {
+      const text = statusText.textContent.toLowerCase();
+      if (text.includes('離席') || text.includes('away') || text.includes('休憩')) {
+        return true;
+      }
+    }
+
+    // パターン2: 離席アイコン・クラス
+    if (loginUserContainer.classList.contains('away') ||
+        loginUserContainer.classList.contains('absent') ||
+        loginUserContainer.querySelector('.away-icon, .absent-icon, [class*="away"], [class*="absent"]')) {
+      return true;
+    }
+
+    // パターン3: グレーアウト表示（離席時によく使われる）
+    const opacity = window.getComputedStyle(loginUserContainer).opacity;
+    if (parseFloat(opacity) < 0.7) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * タイマーUIを作成
    */
   function createTimerUI() {
@@ -660,8 +694,8 @@
     timerElement.querySelectorAll('.rsc-send-btn').forEach(b => b.classList.remove('rsc-active'));
     activeHandSignType = null;
 
-    // 離席モード中はバーチャルカメラを無効化（画像送信不要）
-    disableVirtualCamera();
+    // 仮想カメラを有効化（waveとthumbsupからランダム）
+    enableVirtualCameraRandom();
 
     // 指定時間後に自動解除
     awayModeTimeout = setTimeout(() => {
@@ -948,9 +982,14 @@
       timerElement.classList.add('rsc-timer-flash');
     }
 
-    // 留守モード中はカメラ送信不要、カウントダウンも不要
+    // 留守モード中またはRemowork離席中はカメラ送信不要
     if (isAwayMode) {
       console.log('[HandSign] Away mode: skipping camera image send');
+      return;
+    }
+
+    if (isRemoworkAway()) {
+      console.log('[HandSign] Remowork is in away status: skipping camera image send');
       return;
     }
 
@@ -1017,8 +1056,8 @@
       remainingSeconds--;
       updateTimerDisplay();
 
-      // 5秒以下でカウントダウン音を再生（離席モード中は不要）
-      if (remainingSeconds <= 5 && remainingSeconds > 0 && !isAwayMode) {
+      // 5秒以下でカウントダウン音を再生（Remowork離席中は不要）
+      if (remainingSeconds <= 5 && remainingSeconds > 0 && !isRemoworkAway()) {
         playCountdownSound();
       }
     }
