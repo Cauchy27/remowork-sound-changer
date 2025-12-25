@@ -323,7 +323,11 @@
   let isTranscribing = false;
   let transcriptText = '';
 
-  function startTranscription() {
+  /**
+   * 文字起こしを開始
+   * @param {string} deviceId - 使用するマイクデバイスのID（空の場合はデフォルト）
+   */
+  async function startTranscription(deviceId = '') {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn('[RemoworkTranscription] Web Speech API not supported');
@@ -337,6 +341,17 @@
 
     transcriptText = '';
     isTranscribing = true;
+
+    // 注意: ここではマイクストリームを追加取得しない
+    // Web Speech APIはブラウザのデフォルトマイクを使用する
+    // 通話で既にマイクを使用中の場合、追加のgetUserMediaは競合の原因になりうる
+    //
+    // 相手の音声も文字起こしするには、ユーザーがOSレベルで
+    // 「ステレオミキサー」や仮想オーディオデバイスをデフォルトマイクに設定する必要がある
+    if (deviceId) {
+      console.log('[RemoworkTranscription] Device ID specified:', deviceId);
+      console.log('[RemoworkTranscription] Note: SpeechRecognition uses browser default mic. Set this device as system default for it to work.');
+    }
 
     speechRecognition = new SpeechRecognition();
     speechRecognition.continuous = true;
@@ -437,8 +452,9 @@
   }
 
   // Content Scriptからのコマンドを受信
-  window.addEventListener('remowork-transcription-start', () => {
-    startTranscription();
+  window.addEventListener('remowork-transcription-start', (event) => {
+    const deviceId = event.detail?.deviceId || '';
+    startTranscription(deviceId);
   });
 
   window.addEventListener('remowork-transcription-stop', () => {

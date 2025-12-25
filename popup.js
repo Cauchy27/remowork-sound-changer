@@ -77,6 +77,13 @@ let llmSettings = {
   }
 };
 
+// Whisper設定（相手の声の文字起こし用）
+let whisperSettings = {
+  enabled: false,
+  apiKey: '',
+  language: 'ja'
+};
+
 // LLMモデルの定義
 const LLM_MODELS = {
   gemini: [
@@ -179,6 +186,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
+  // Whisper設定を読み込む
+  if (isExtension) {
+    try {
+      const whisperResponse = await sendMessage({ type: 'GET_WHISPER_SETTINGS' });
+      console.log('[Popup] whisperResponse:', whisperResponse);
+      if (whisperResponse && whisperResponse.success && whisperResponse.data) {
+        whisperSettings = { ...whisperSettings, ...whisperResponse.data };
+      }
+    } catch (error) {
+      console.error('[Popup] Error loading Whisper settings:', error);
+    }
+  }
+
   // UIを構築
   renderSoundList();
   setupEventListeners();
@@ -186,6 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await setupHandSignSettings();
   setupVirtualCamera();
   setupLLMSettings();
+  setupWhisperSettings();
 
   // 有効/無効トグルの初期状態
   document.getElementById('enabled-toggle').checked = settings.enabled !== false;
@@ -1512,6 +1533,107 @@ async function testLLMConnection(resultEl) {
 
     if (response.success) {
       resultEl.textContent = `✅ 接続成功！レスポンス: "${response.message}"`;
+      resultEl.style.color = 'var(--success-color)';
+    } else {
+      resultEl.textContent = `❌ エラー: ${response.error}`;
+      resultEl.style.color = 'var(--danger-color)';
+    }
+  } catch (error) {
+    resultEl.textContent = `❌ 接続エラー: ${error.message}`;
+    resultEl.style.color = 'var(--danger-color)';
+  }
+}
+
+/**
+ * Whisper設定をセットアップ
+ */
+function setupWhisperSettings() {
+  const enabledToggle = document.getElementById('whisper-enabled-toggle');
+  const apiKeyInput = document.getElementById('whisper-api-key');
+  const toggleVisibilityBtn = document.getElementById('toggle-whisper-key-visibility');
+  const languageSelect = document.getElementById('whisper-language');
+  const testConnectionBtn = document.getElementById('test-whisper-connection');
+  const testResultEl = document.getElementById('whisper-test-result');
+
+  if (!enabledToggle) return; // 要素がなければスキップ
+
+  // 初期値を設定
+  enabledToggle.checked = whisperSettings.enabled;
+  apiKeyInput.value = whisperSettings.apiKey || '';
+  languageSelect.value = whisperSettings.language || 'ja';
+
+  // 有効/無効トグル
+  enabledToggle.addEventListener('change', async () => {
+    whisperSettings.enabled = enabledToggle.checked;
+    await saveWhisperSettings();
+    showToast(whisperSettings.enabled ? 'Whisper文字起こしを有効化しました' : 'Whisper文字起こしを無効化しました');
+  });
+
+  // APIキー変更
+  apiKeyInput.addEventListener('change', async () => {
+    whisperSettings.apiKey = apiKeyInput.value.trim();
+    await saveWhisperSettings();
+    showToast('Whisper APIキーを保存しました');
+  });
+
+  // APIキー表示/非表示
+  toggleVisibilityBtn.addEventListener('click', () => {
+    if (apiKeyInput.type === 'password') {
+      apiKeyInput.type = 'text';
+      toggleVisibilityBtn.textContent = '🙈';
+    } else {
+      apiKeyInput.type = 'password';
+      toggleVisibilityBtn.textContent = '👁';
+    }
+  });
+
+  // 言語変更
+  languageSelect.addEventListener('change', async () => {
+    whisperSettings.language = languageSelect.value;
+    await saveWhisperSettings();
+  });
+
+  // 接続テスト
+  testConnectionBtn.addEventListener('click', () => {
+    testWhisperConnection(testResultEl);
+  });
+}
+
+/**
+ * Whisper設定を保存
+ */
+async function saveWhisperSettings() {
+  if (isExtension) {
+    try {
+      await sendMessage({ type: 'SAVE_WHISPER_SETTINGS', settings: whisperSettings });
+      console.log('[Popup] Whisper settings saved');
+    } catch (error) {
+      console.error('[Popup] Error saving Whisper settings:', error);
+    }
+  }
+}
+
+/**
+ * Whisper接続テスト
+ */
+async function testWhisperConnection(resultEl) {
+  if (!whisperSettings.apiKey) {
+    resultEl.textContent = '❌ APIキーを入力してください';
+    resultEl.style.color = 'var(--danger-color)';
+    return;
+  }
+
+  resultEl.textContent = '🔄 テスト中...';
+  resultEl.style.color = 'var(--text-secondary)';
+
+  try {
+    const response = await sendMessage({
+      type: 'TEST_WHISPER_CONNECTION',
+      apiKey: whisperSettings.apiKey
+    });
+
+    if (response.success) {
+      resultEl.textContent = `✅ ${response.message}`;
       resultEl.style.color = 'var(--success-color)';
     } else {
       resultEl.textContent = `❌ エラー: ${response.error}`;

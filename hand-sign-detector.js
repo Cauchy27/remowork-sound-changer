@@ -660,8 +660,8 @@
     timerElement.querySelectorAll('.rsc-send-btn').forEach(b => b.classList.remove('rsc-active'));
     activeHandSignType = null;
 
-    // 仮想カメラを有効化（waveとthumbsupからランダム）
-    enableVirtualCameraRandom();
+    // 離席モード中はバーチャルカメラを無効化（画像送信不要）
+    disableVirtualCamera();
 
     // 指定時間後に自動解除
     awayModeTimeout = setTimeout(() => {
@@ -948,10 +948,9 @@
       timerElement.classList.add('rsc-timer-flash');
     }
 
-    // 留守モード中は継続（次の撮影もランダム画像を使用）
+    // 留守モード中はカメラ送信不要、カウントダウンも不要
     if (isAwayMode) {
-      enableVirtualCameraRandom();
-      console.log('[HandSign] Away mode: continuing with random image');
+      console.log('[HandSign] Away mode: skipping camera image send');
       return;
     }
 
@@ -1018,8 +1017,8 @@
       remainingSeconds--;
       updateTimerDisplay();
 
-      // 5秒以下でカウントダウン音を再生
-      if (remainingSeconds <= 5 && remainingSeconds > 0) {
+      // 5秒以下でカウントダウン音を再生（離席モード中は不要）
+      if (remainingSeconds <= 5 && remainingSeconds > 0 && !isAwayMode) {
         playCountdownSound();
       }
     }
@@ -1456,6 +1455,14 @@
   // 文字起こし関連（ページコンテキスト inject.js 経由）
   let transcriptText = '';
   let isTranscribing = false;
+  let selectedMicDeviceId = ''; // 選択されたマイクデバイスID
+
+  // Whisper文字起こし関連（相手の声）
+  let whisperSettings = { enabled: false, apiKey: '', language: 'ja' };
+  let whisperTranscriptText = '';
+  let whisperMediaRecorder = null;
+  let whisperInterval = null;
+  let tabAudioStream = null;
 
   // 自動構造化関連
   let structureInterval = null;
@@ -1657,7 +1664,57 @@
                   <button class="rsc-copy-btn" data-target="transcript" title="コピー">📋</button>
                 </div>
               </div>
+              <div class="rsc-mic-selector">
+                <label class="rsc-mic-label">🎤 入力デバイス:</label>
+                <select class="rsc-mic-select">
+                  <option value="">読み込み中...</option>
+                </select>
+                <button class="rsc-mic-refresh" title="デバイス一覧を更新">🔄</button>
+              </div>
+              <div class="rsc-transcription-notice">
+                <div class="rsc-notice-header">
+                  <span class="rsc-notice-icon">⚠️</span>
+                  <span class="rsc-notice-title">文字起こしの制限について</span>
+                  <button class="rsc-notice-toggle" title="詳細を表示/非表示">▼</button>
+                </div>
+                <div class="rsc-notice-content">
+                  <p><strong>現在の仕様:</strong> 文字起こしは<em>自分の声のみ</em>が対象です。相手の声は自動では取り込めません。</p>
+                  <p><strong>相手の声も文字起こしするには:</strong></p>
+                  <div class="rsc-notice-os">
+                    <div class="rsc-notice-os-section">
+                      <span class="rsc-os-label">🪟 Windows</span>
+                      <ol>
+                        <li>「サウンド設定」→「録音」タブを開く</li>
+                        <li>「ステレオミキサー」を右クリック→有効化</li>
+                        <li>ステレオミキサーを「既定のデバイス」に設定</li>
+                      </ol>
+                    </div>
+                    <div class="rsc-notice-os-section">
+                      <span class="rsc-os-label">🍎 macOS</span>
+                      <ol>
+                        <li><a href="https://existential.audio/blackhole/" target="_blank" rel="noopener">BlackHole</a>をインストール</li>
+                        <li>「Audio MIDI設定」で複数出力装置を作成</li>
+                        <li>システム出力先を仮想デバイスに変更</li>
+                      </ol>
+                    </div>
+                  </div>
+                  <p class="rsc-notice-footnote">※ これはブラウザのセキュリティ仕様による制限です</p>
+                </div>
+              </div>
               <div class="rsc-transcript-area" contenteditable="false"></div>
+            </div>
+            <div class="rsc-notes-section rsc-whisper-section" style="display: none;">
+              <div class="rsc-notes-header">
+                <span class="rsc-notes-title">🎧 相手の発言（Whisper）</span>
+                <div class="rsc-whisper-controls">
+                  <span class="rsc-whisper-status">停止中</span>
+                  <button class="rsc-copy-btn" data-target="whisper" title="コピー">📋</button>
+                </div>
+              </div>
+              <div class="rsc-whisper-info">
+                💡 録音開始時に「タブの音声を共有」を選択すると、相手の声も文字起こしされます
+              </div>
+              <div class="rsc-whisper-area" contenteditable="false">（Whisper有効時に表示）</div>
             </div>
             <div class="rsc-notes-actions">
               <button class="rsc-copy-all-btn" title="全てコピー">📋 全てコピー</button>
@@ -2229,6 +2286,192 @@
         align-items: center;
         gap: 8px;
       }
+      .rsc-mic-selector {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 8px;
+      }
+      .rsc-mic-label {
+        font-size: 12px;
+        color: #a0aec0;
+        white-space: nowrap;
+      }
+      .rsc-mic-select {
+        flex: 1;
+        background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #e2e8f0;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+        max-width: 280px;
+      }
+      .rsc-mic-select:focus {
+        outline: none;
+        border-color: rgba(99, 102, 241, 0.6);
+      }
+      .rsc-mic-refresh {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 4px;
+        border-radius: 4px;
+        opacity: 0.7;
+        transition: all 0.2s;
+      }
+      .rsc-mic-refresh:hover {
+        opacity: 1;
+        background: rgba(255,255,255,0.1);
+      }
+      .rsc-transcription-notice {
+        background: rgba(255, 193, 7, 0.1);
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 8px;
+        margin-bottom: 10px;
+        overflow: hidden;
+      }
+      .rsc-notice-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .rsc-notice-header:hover {
+        background: rgba(255, 193, 7, 0.15);
+      }
+      .rsc-notice-icon {
+        font-size: 14px;
+      }
+      .rsc-notice-title {
+        flex: 1;
+        font-size: 12px;
+        font-weight: 600;
+        color: #ffc107;
+      }
+      .rsc-notice-toggle {
+        background: none;
+        border: none;
+        color: #a0aec0;
+        font-size: 10px;
+        cursor: pointer;
+        padding: 2px 6px;
+        transition: transform 0.2s;
+      }
+      .rsc-notice-toggle.collapsed {
+        transform: rotate(-90deg);
+      }
+      .rsc-notice-content {
+        padding: 0 12px 12px;
+        font-size: 11px;
+        color: #cbd5e0;
+        line-height: 1.5;
+      }
+      .rsc-notice-content.collapsed {
+        display: none;
+      }
+      .rsc-notice-content p {
+        margin: 0 0 8px;
+      }
+      .rsc-notice-content strong {
+        color: #e2e8f0;
+      }
+      .rsc-notice-content em {
+        color: #fc8181;
+        font-style: normal;
+        font-weight: 600;
+      }
+      .rsc-notice-os {
+        display: flex;
+        gap: 12px;
+        margin: 8px 0;
+      }
+      .rsc-notice-os-section {
+        flex: 1;
+        background: rgba(0,0,0,0.2);
+        border-radius: 6px;
+        padding: 8px;
+      }
+      .rsc-os-label {
+        display: block;
+        font-weight: 600;
+        color: #a0aec0;
+        margin-bottom: 6px;
+        font-size: 11px;
+      }
+      .rsc-notice-os-section ol {
+        margin: 0;
+        padding-left: 16px;
+        font-size: 10px;
+        color: #a0aec0;
+      }
+      .rsc-notice-os-section li {
+        margin-bottom: 3px;
+      }
+      .rsc-notice-os-section a {
+        color: #63b3ed;
+        text-decoration: none;
+      }
+      .rsc-notice-os-section a:hover {
+        text-decoration: underline;
+      }
+      .rsc-notice-footnote {
+        font-size: 10px;
+        color: #718096;
+        margin-top: 8px !important;
+        margin-bottom: 0 !important;
+      }
+      .rsc-whisper-section {
+        border-top: 1px solid rgba(255,255,255,0.1);
+        padding-top: 10px;
+        margin-top: 10px;
+      }
+      .rsc-whisper-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rsc-whisper-status {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: rgba(113, 128, 150, 0.3);
+        color: #a0aec0;
+      }
+      .rsc-whisper-status.active {
+        background: rgba(72, 187, 120, 0.3);
+        color: #68d391;
+      }
+      .rsc-whisper-info {
+        font-size: 11px;
+        color: #718096;
+        padding: 6px 0;
+        line-height: 1.4;
+      }
+      .rsc-whisper-area {
+        flex: 1;
+        background: rgba(0,0,0,0.3);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 12px;
+        color: #e2e8f0;
+        min-height: 80px;
+        max-height: 150px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+      }
+      .rsc-whisper-area:empty::before {
+        content: '（相手の音声を待機中...）';
+        color: #4a5568;
+      }
       .rsc-notes-actions {
         display: flex;
         justify-content: flex-end;
@@ -2374,6 +2617,8 @@
           text = toolsModal.querySelector('.rsc-structured-notes-area')?.textContent || '';
         } else if (target === 'transcript') {
           text = toolsModal.querySelector('.rsc-transcript-area')?.textContent || '';
+        } else if (target === 'whisper') {
+          text = toolsModal.querySelector('.rsc-whisper-area')?.textContent || '';
         }
 
         if (text && !text.startsWith('（')) {
@@ -2634,6 +2879,10 @@
       }
       // 録音履歴を読み込み（古い録音の自動削除も実行）
       await loadRecordings();
+
+      // マイクデバイス一覧を読み込み
+      await loadMicrophoneDevices();
+      setupMicSelectorListeners();
     }
 
     // 保存された高さを復元
@@ -2931,6 +3180,12 @@
       // 自動構造化を開始
       startAutoStructure();
 
+      // Whisper文字起こしを開始（タブ音声がある場合）
+      if (tabAudioStream) {
+        await loadWhisperSettings();
+        startWhisperTranscription(tabAudioStream);
+      }
+
       console.log('[HandSign] Recording started');
 
     } catch (error) {
@@ -2991,6 +3246,9 @@
           tabSource.connect(audioDestination);
           hasTabAudio = true;
 
+          // Whisper用にタブ音声ストリームを保持
+          tabAudioStream = audioOnlyStream;
+
           displayStream.getVideoTracks().forEach(track => track.stop());
         } else {
           showRecorderError('タブの音声が共有されていません');
@@ -3045,6 +3303,7 @@
       stopRecorderTimer();
       stopTranscription();
       stopAutoStructure();
+      stopWhisperTranscription();
       releaseRecordingStream();
       updateRecorderUI('idle');
     }
@@ -3060,9 +3319,11 @@
     updateTranscriptDisplay('文字起こしを開始しています...');
     transcriptText = '';
 
-    // inject.js にイベントを送信
-    window.dispatchEvent(new CustomEvent('remowork-transcription-start'));
-    console.log('[HandSign] Transcription start requested');
+    // inject.js にイベントを送信（選択されたデバイスIDを含める）
+    window.dispatchEvent(new CustomEvent('remowork-transcription-start', {
+      detail: { deviceId: selectedMicDeviceId }
+    }));
+    console.log('[HandSign] Transcription start requested with device:', selectedMicDeviceId || 'default');
   }
 
   /**
@@ -3127,6 +3388,284 @@
   }
 
   /**
+   * マイクデバイス一覧を取得して表示
+   */
+  async function loadMicrophoneDevices() {
+    const micSelect = toolsModal?.querySelector('.rsc-mic-select');
+    if (!micSelect) return;
+
+    try {
+      // まずマイクの許可を取得（許可がないとラベルが取得できない）
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => stream.getTracks().forEach(track => track.stop()))
+        .catch(() => {});
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+
+      micSelect.innerHTML = '';
+
+      // デフォルトオプション
+      const defaultOption = document.createElement('option');
+      defaultOption.value = '';
+      defaultOption.textContent = 'デフォルトマイク';
+      micSelect.appendChild(defaultOption);
+
+      // 各デバイス
+      audioInputs.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.textContent = device.label || `マイク ${index + 1}`;
+        micSelect.appendChild(option);
+      });
+
+      // 保存された設定を復元
+      const savedDeviceId = await loadSavedMicDevice();
+      if (savedDeviceId) {
+        const exists = audioInputs.some(d => d.deviceId === savedDeviceId);
+        if (exists) {
+          micSelect.value = savedDeviceId;
+          selectedMicDeviceId = savedDeviceId;
+        }
+      }
+
+      console.log('[HandSign] Loaded', audioInputs.length, 'audio input devices');
+    } catch (error) {
+      console.error('[HandSign] Failed to load microphone devices:', error);
+      micSelect.innerHTML = '<option value="">デバイス取得に失敗</option>';
+    }
+  }
+
+  /**
+   * 保存されたマイクデバイスIDを読み込み
+   */
+  async function loadSavedMicDevice() {
+    return new Promise((resolve) => {
+      if (!isExtensionContextValid()) {
+        resolve('');
+        return;
+      }
+      chrome.storage.local.get(['selectedMicDeviceId'], (result) => {
+        resolve(result.selectedMicDeviceId || '');
+      });
+    });
+  }
+
+  /**
+   * 選択されたマイクデバイスIDを保存
+   */
+  function saveMicDevice(deviceId) {
+    if (!isExtensionContextValid()) return;
+    chrome.storage.local.set({ selectedMicDeviceId: deviceId });
+  }
+
+  /**
+   * マイクデバイス選択UIのイベントリスナーを設定
+   */
+  function setupMicSelectorListeners() {
+    const micSelect = toolsModal?.querySelector('.rsc-mic-select');
+    const micRefresh = toolsModal?.querySelector('.rsc-mic-refresh');
+    const noticeHeader = toolsModal?.querySelector('.rsc-notice-header');
+    const noticeToggle = toolsModal?.querySelector('.rsc-notice-toggle');
+    const noticeContent = toolsModal?.querySelector('.rsc-notice-content');
+
+    if (micSelect) {
+      micSelect.addEventListener('change', (e) => {
+        selectedMicDeviceId = e.target.value;
+        saveMicDevice(selectedMicDeviceId);
+        console.log('[HandSign] Selected mic device:', selectedMicDeviceId || 'default');
+
+        // 文字起こし中なら再起動
+        if (isTranscribing) {
+          stopTranscription();
+          setTimeout(() => startTranscription(), 500);
+        }
+      });
+    }
+
+    if (micRefresh) {
+      micRefresh.addEventListener('click', () => {
+        loadMicrophoneDevices();
+      });
+    }
+
+    // 注意書きの開閉トグル
+    if (noticeHeader && noticeToggle && noticeContent) {
+      // 初期状態は閉じておく
+      noticeToggle.classList.add('collapsed');
+      noticeContent.classList.add('collapsed');
+
+      noticeHeader.addEventListener('click', () => {
+        noticeToggle.classList.toggle('collapsed');
+        noticeContent.classList.toggle('collapsed');
+      });
+    }
+  }
+
+  // =============================================
+  // Whisper文字起こし（相手の声）
+  // =============================================
+
+  /**
+   * Whisper設定を読み込む
+   */
+  async function loadWhisperSettings() {
+    if (!isExtensionContextValid()) return;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_WHISPER_SETTINGS' });
+      if (response?.success && response.data) {
+        whisperSettings = response.data;
+        console.log('[HandSign] Whisper settings loaded:', whisperSettings.enabled ? 'enabled' : 'disabled');
+        updateWhisperUI();
+      }
+    } catch (error) {
+      console.warn('[HandSign] Failed to load Whisper settings:', error);
+    }
+  }
+
+  /**
+   * Whisper UIを更新
+   */
+  function updateWhisperUI() {
+    const whisperSection = toolsModal?.querySelector('.rsc-whisper-section');
+    if (whisperSection) {
+      whisperSection.style.display = whisperSettings.enabled ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Whisper文字起こしを開始（タブ音声をキャプチャ）
+   */
+  async function startWhisperTranscription(audioStream) {
+    if (!whisperSettings.enabled || !whisperSettings.apiKey) {
+      console.log('[HandSign] Whisper not enabled or no API key');
+      return;
+    }
+
+    if (!audioStream || audioStream.getAudioTracks().length === 0) {
+      console.warn('[HandSign] No audio stream for Whisper');
+      return;
+    }
+
+    // タブ音声ストリームを保持
+    tabAudioStream = audioStream;
+    whisperTranscriptText = '';
+
+    // Whisperセクションを表示
+    const whisperSection = toolsModal?.querySelector('.rsc-whisper-section');
+    const whisperStatus = toolsModal?.querySelector('.rsc-whisper-status');
+    const whisperArea = toolsModal?.querySelector('.rsc-whisper-area');
+
+    if (whisperSection) whisperSection.style.display = 'block';
+    if (whisperStatus) {
+      whisperStatus.textContent = '録音中...';
+      whisperStatus.classList.add('active');
+    }
+    if (whisperArea) whisperArea.textContent = '';
+
+    // 10秒ごとに音声をキャプチャしてWhisperに送信
+    whisperInterval = setInterval(() => {
+      captureAndTranscribe();
+    }, 10000);
+
+    // 最初のキャプチャを5秒後に開始
+    setTimeout(() => {
+      captureAndTranscribe();
+    }, 5000);
+
+    console.log('[HandSign] Whisper transcription started');
+  }
+
+  /**
+   * 音声をキャプチャしてWhisperに送信
+   */
+  async function captureAndTranscribe() {
+    if (!tabAudioStream || !whisperSettings.enabled) return;
+
+    try {
+      // 5秒間の音声をキャプチャ
+      const audioChunks = [];
+      const recorder = new MediaRecorder(tabAudioStream, { mimeType: 'audio/webm;codecs=opus' });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        if (audioChunks.length === 0) return;
+
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+        // Blobをbase64に変換
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Audio = reader.result.split(',')[1];
+
+          try {
+            const response = await chrome.runtime.sendMessage({
+              type: 'TRANSCRIBE_AUDIO',
+              audioBase64: base64Audio
+            });
+
+            if (response?.success && response.text) {
+              whisperTranscriptText += response.text + '\n';
+              updateWhisperDisplay(whisperTranscriptText);
+              console.log('[HandSign] Whisper transcribed:', response.text.substring(0, 50));
+            } else if (response?.error) {
+              console.warn('[HandSign] Whisper error:', response.error);
+            }
+          } catch (err) {
+            console.error('[HandSign] Whisper API error:', err);
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      recorder.start();
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop();
+        }
+      }, 5000);
+
+    } catch (error) {
+      console.error('[HandSign] Capture error:', error);
+    }
+  }
+
+  /**
+   * Whisper文字起こしを停止
+   */
+  function stopWhisperTranscription() {
+    if (whisperInterval) {
+      clearInterval(whisperInterval);
+      whisperInterval = null;
+    }
+
+    const whisperStatus = toolsModal?.querySelector('.rsc-whisper-status');
+    if (whisperStatus) {
+      whisperStatus.textContent = '停止中';
+      whisperStatus.classList.remove('active');
+    }
+
+    tabAudioStream = null;
+    console.log('[HandSign] Whisper transcription stopped');
+  }
+
+  /**
+   * Whisper表示を更新
+   */
+  function updateWhisperDisplay(text) {
+    const whisperArea = toolsModal?.querySelector('.rsc-whisper-area');
+    if (whisperArea) {
+      whisperArea.textContent = text || '';
+      whisperArea.scrollTop = whisperArea.scrollHeight;
+    }
+  }
+
+  /**
    * メモエリアを表示/非表示
    */
   function showMeetingNotesArea(show) {
@@ -3142,15 +3681,18 @@
   function clearMeetingNotes() {
     transcriptText = '';
     lastStructuredText = '';
+    whisperTranscriptText = '';
     const transcriptArea = toolsModal?.querySelector('.rsc-transcript-area');
     const manualNotes = toolsModal?.querySelector('.rsc-manual-notes');
     const structuredArea = toolsModal?.querySelector('.rsc-structured-notes-area');
+    const whisperArea = toolsModal?.querySelector('.rsc-whisper-area');
     if (transcriptArea) transcriptArea.textContent = '';
     if (manualNotes) manualNotes.value = '';
     if (structuredArea) {
       structuredArea.textContent = '（AIタブで設定後、録音中に自動構造化されます）';
       structuredArea.classList.add('placeholder');
     }
+    if (whisperArea) whisperArea.textContent = '';
   }
 
   /**
@@ -3346,7 +3888,11 @@
     // 文字起こしとメモを結合
     let combinedInput = '';
     if (hasTranscript) {
-      combinedInput += '【文字起こし】\n' + transcriptText.trim() + '\n\n';
+      combinedInput += '【自分の発言（文字起こし）】\n' + transcriptText.trim() + '\n\n';
+    }
+    // 相手の発言（Whisper）があれば追加
+    if (whisperTranscriptText && whisperTranscriptText.trim()) {
+      combinedInput += '【相手の発言（Whisper）】\n' + whisperTranscriptText.trim() + '\n\n';
     }
     if (hasNotes) {
       combinedInput += '【手動メモ】\n' + manualNotes.trim();
@@ -3423,6 +3969,7 @@
   function getMeetingNotesText() {
     const manualNotes = toolsModal?.querySelector('.rsc-manual-notes')?.value || '';
     const structuredNotes = toolsModal?.querySelector('.rsc-structured-notes-area')?.textContent || '';
+    const whisperNotes = toolsModal?.querySelector('.rsc-whisper-area')?.textContent || '';
     let text = '';
 
     // 構造化メモ（AIによる要約）を先頭に
@@ -3435,9 +3982,14 @@
       text += '【メモ】\n' + manualNotes.trim() + '\n\n';
     }
 
-    // 文字起こし
+    // 文字起こし（自分の発言）
     if (transcriptText.trim()) {
-      text += '【文字起こし】\n' + transcriptText.trim() + '\n';
+      text += '【文字起こし（自分）】\n' + transcriptText.trim() + '\n\n';
+    }
+
+    // 相手の発言（Whisper）
+    if (whisperNotes.trim()) {
+      text += '【相手の発言（Whisper）】\n' + whisperNotes.trim() + '\n';
     }
 
     return text;

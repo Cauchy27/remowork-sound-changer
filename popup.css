@@ -680,3 +680,44 @@ input:checked + .slider:before {
   margin-bottom: 0;
 }
 
+/* Section Divider */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 20px 0;
+}
+
+/* Info Box */
+.info-box {
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.info-box.warning {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  color: var(--text-color);
+}
+
+.info-box p {
+  margin: 0;
+}
+
+.info-box p.note {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--border-color);
+}
+

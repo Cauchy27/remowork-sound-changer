@@ -475,6 +475,32 @@ async function handleMessage(message) {
       const structureResult = await structureTranscript(message.transcript, message.settings);
       return structureResult;
 
+    // Whisper API関連
+    case 'GET_WHISPER_SETTINGS':
+      const whisperSettings = await getWhisperSettings();
+      return { success: true, data: whisperSettings };
+
+    case 'SAVE_WHISPER_SETTINGS':
+      await saveWhisperSettings(message.settings);
+      return { success: true };
+
+    case 'TEST_WHISPER_CONNECTION':
+      const whisperTestResult = await testWhisperConnection(message.apiKey);
+      return whisperTestResult;
+
+    case 'TRANSCRIBE_AUDIO':
+      try {
+        const whisperConfig = await getWhisperSettings();
+        const transcribedText = await transcribeWithWhisper(
+          message.audioBase64,
+          whisperConfig.apiKey,
+          whisperConfig.language || 'ja'
+        );
+        return { success: true, text: transcribedText };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+
     default:
       return { success: false, error: 'Unknown message type' };
   }
@@ -956,4 +982,114 @@ ${input}
 - 参加者情報を参考に、固有名詞や専門用語の漢字変換を正確に`;
 
   return prompt;
+}
+
+// ========================================
+// Whisper API（タブ音声文字起こし）
+// ========================================
+
+/**
+ * Whisper設定を取得
+ */
+async function getWhisperSettings() {
+  return new Promise(async (resolve) => {
+    chrome.storage.local.get(['whisperSettings', '_whisperApiKey'], async (result) => {
+      const settings = result.whisperSettings || {
+        enabled: false,
+        apiKey: '',
+        language: 'ja'
+      };
+
+      // 暗号化されたAPIキーを復号化
+      if (result._whisperApiKey) {
+        settings.apiKey = await decryptApiKey(result._whisperApiKey);
+      }
+
+      resolve(settings);
+    });
+  });
+}
+
+/**
+ * Whisper設定を保存
+ */
+async function saveWhisperSettings(settings) {
+  const { apiKey, ...otherSettings } = settings;
+  const encryptedApiKey = await encryptApiKey(apiKey);
+
+  return new Promise((resolve) => {
+    chrome.storage.local.set({
+      whisperSettings: { ...otherSettings, apiKey: '' },
+      _whisperApiKey: encryptedApiKey
+    }, resolve);
+  });
+}
+
+/**
+ * Whisper APIで音声をテキストに変換
+ * @param {string} audioBase64 - Base64エンコードされた音声データ（webm形式）
+ * @param {string} apiKey - OpenAI APIキー
+ * @param {string} language - 言語コード（ja, enなど）
+ */
+async function transcribeWithWhisper(audioBase64, apiKey, language = 'ja') {
+  if (!apiKey) {
+    throw new Error('Whisper APIキーが設定されていません');
+  }
+
+  // Base64をBlobに変換
+  const binaryString = atob(audioBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const audioBlob = new Blob([bytes], { type: 'audio/webm' });
+
+  // FormDataを作成
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'audio.webm');
+  formData.append('model', 'whisper-1');
+  formData.append('language', language);
+  formData.append('response_format', 'text');
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Whisper API error: ${response.status}`);
+  }
+
+  const text = await response.text();
+  return text.trim();
+}
+
+/**
+ * Whisper接続テスト（短い無音データを送信）
+ */
+async function testWhisperConnection(apiKey) {
+  try {
+    // 最小限のテスト - APIキーの有効性確認のみ
+    const response = await fetch('https://api.openai.com/v1/models/whisper-1', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('APIキーが無効です');
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    return { success: true, message: 'Whisper APIに接続しました' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
