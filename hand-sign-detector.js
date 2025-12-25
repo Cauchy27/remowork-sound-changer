@@ -3517,15 +3517,15 @@
     }
     if (whisperArea) whisperArea.textContent = '';
 
-    // 10秒ごとに音声をキャプチャしてWhisperに送信
+    // 30秒ごとに音声をキャプチャしてWhisperに送信
     whisperInterval = setInterval(() => {
       captureAndTranscribe();
-    }, 10000);
+    }, 30000);
 
-    // 最初のキャプチャを5秒後に開始
+    // 最初のキャプチャを15秒後に開始
     setTimeout(() => {
       captureAndTranscribe();
-    }, 5000);
+    }, 15000);
 
     console.log('[HandSign] Whisper transcription started');
   }
