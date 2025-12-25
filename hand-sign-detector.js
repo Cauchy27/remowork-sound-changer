@@ -982,9 +982,10 @@
       timerElement.classList.add('rsc-timer-flash');
     }
 
-    // 留守モード中またはRemowork離席中はカメラ送信不要
+    // 留守モード中は画像をランダムに変更して送信
     if (isAwayMode) {
-      console.log('[HandSign] Away mode: skipping camera image send');
+      console.log('[HandSign] Away mode: selecting random image for next capture');
+      enableVirtualCameraRandom();
       return;
     }
 
