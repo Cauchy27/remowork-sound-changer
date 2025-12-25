@@ -2049,12 +2049,13 @@
 
       /* 保存済み画像一覧 */
       .rsc-saved-images {
-        margin-top: 16px;
-        max-height: 350px;
+        margin-top: 12px;
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
       }
       .rsc-saved-images-section {
-        margin-bottom: 12px;
+        margin-bottom: 8px;
       }
       .rsc-saved-images-section:last-child {
         margin-bottom: 0;
@@ -2063,21 +2064,19 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
+        margin-bottom: 4px;
       }
       .rsc-saved-images-title {
         color: #a0aec0;
-        font-size: 12px;
+        font-size: 11px;
       }
       .rsc-delete-all-btn {
-        padding: 2px 8px;
+        padding: 2px 6px;
         border: none;
         border-radius: 4px;
         background: rgba(239, 68, 68, 0.2);
         color: #f87171;
-        font-size: 11px;
+        font-size: 10px;
         cursor: pointer;
         transition: all 0.2s;
       }
@@ -2089,14 +2088,17 @@
         cursor: not-allowed;
       }
       .rsc-saved-images-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 8px;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 4px;
       }
       .rsc-saved-image-item {
         position: relative;
-        aspect-ratio: 1;
-        border-radius: 8px;
+        width: 50px;
+        height: 50px;
+        flex-shrink: 0;
+        border-radius: 6px;
         overflow: hidden;
         background: #000;
       }
@@ -2134,41 +2136,6 @@
         font-size: 12px;
         text-align: center;
         padding: 8px;
-      }
-
-      /* レスポンシブ: 狭い画面でカメラを優先 */
-      @media (max-height: 800px) {
-        .rsc-camera-body {
-          height: 200px;
-        }
-        .rsc-saved-images-grid {
-          grid-template-columns: repeat(6, 1fr);
-          gap: 4px;
-        }
-        .rsc-saved-image-item {
-          border-radius: 4px;
-        }
-        .rsc-saved-image-delete {
-          width: 16px;
-          height: 16px;
-          font-size: 10px;
-          top: 2px;
-          right: 2px;
-        }
-        .rsc-saved-images-section {
-          margin-bottom: 8px;
-        }
-        .rsc-saved-images-title {
-          font-size: 11px;
-        }
-      }
-      @media (max-height: 700px) {
-        .rsc-camera-body {
-          height: 180px;
-        }
-        .rsc-saved-images-grid {
-          grid-template-columns: repeat(8, 1fr);
-        }
       }
 
       /* 録音タブ */
