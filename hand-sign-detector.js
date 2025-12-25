@@ -2049,10 +2049,7 @@
 
       /* 保存済み画像一覧 */
       .rsc-saved-images {
-        margin-top: 12px;
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
+        margin-top: 16px;
       }
       .rsc-saved-images-section {
         margin-bottom: 8px;
@@ -2088,17 +2085,14 @@
         cursor: not-allowed;
       }
       .rsc-saved-images-grid {
-        display: flex;
-        gap: 6px;
-        overflow-x: auto;
-        padding-bottom: 4px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
       }
       .rsc-saved-image-item {
         position: relative;
-        width: 50px;
-        height: 50px;
-        flex-shrink: 0;
-        border-radius: 6px;
+        aspect-ratio: 1;
+        border-radius: 8px;
         overflow: hidden;
         background: #000;
       }
