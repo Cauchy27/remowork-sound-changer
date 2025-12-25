@@ -1971,8 +1971,8 @@
         background: #000;
         border-radius: 12px;
         overflow: hidden;
-        margin-bottom: 16px;
-        aspect-ratio: 4 / 3;
+        margin-bottom: 12px;
+        height: 240px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1985,19 +1985,20 @@
         transform: scaleX(-1);
       }
       .rsc-camera-actions {
-        display: flex;
-        gap: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
         justify-content: center;
       }
       .rsc-camera-btn {
-        flex: 1;
-        padding: 14px 20px;
+        padding: 10px 8px;
         border: none;
-        border-radius: 10px;
-        font-size: 16px;
+        border-radius: 8px;
+        font-size: 13px;
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
+        white-space: nowrap;
       }
       .rsc-capture-wave {
         background: linear-gradient(135deg, #667eea, #764ba2);
@@ -2027,9 +2028,9 @@
       .rsc-camera-status {
         text-align: center;
         color: #888;
-        font-size: 14px;
-        margin-top: 12px;
-        min-height: 20px;
+        font-size: 13px;
+        margin-top: 8px;
+        min-height: 18px;
       }
       .rsc-camera-status.rsc-success {
         color: #4ade80;
@@ -2040,10 +2041,10 @@
       .rsc-image-counts {
         display: flex;
         justify-content: center;
-        gap: 24px;
-        margin-top: 12px;
+        gap: 16px;
+        margin-top: 8px;
         color: #a0aec0;
-        font-size: 13px;
+        font-size: 12px;
       }
 
       /* 保存済み画像一覧 */
