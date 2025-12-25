@@ -39,6 +39,9 @@
   // LLM設定（自動構造化用）
   let llmSettings = null;
 
+  // プリセット音声（カウントダウン音などで使用）
+  let presetSounds = null;
+
   /**
    * 拡張機能コンテキストが有効かチェック
    */
@@ -980,8 +983,8 @@
     if (!presetSounds) {
       try {
         const result = await chrome.runtime.sendMessage({ type: 'GET_PRESET_SOUNDS' });
-        if (result && result.presets) {
-          presetSounds = result.presets;
+        if (result && result.success && result.data) {
+          presetSounds = result.data;
         }
       } catch (e) {
         console.warn('[HandSign] Failed to load preset sounds:', e);
@@ -1069,7 +1072,9 @@
   function updateTimerVisibility() {
     if (!timerElement) return;
 
-    if (settings.enabled) {
+    // settings.enabled が明示的に false の場合のみ非表示
+    // undefined や存在しない場合は表示する（デフォルト有効）
+    if (settings.enabled !== false) {
       timerElement.classList.remove('rsc-timer-hidden');
     } else {
       timerElement.classList.add('rsc-timer-hidden');
@@ -1377,6 +1382,17 @@
 
     // 設定を読み込む
     await loadSettings();
+
+    // プリセット音声をプリロード（カウントダウン音などで使用）
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'GET_PRESET_SOUNDS' });
+      if (result && result.success && result.data) {
+        presetSounds = result.data;
+        console.log('[HandSign] Preset sounds preloaded');
+      }
+    } catch (e) {
+      console.warn('[HandSign] Failed to preload preset sounds:', e);
+    }
 
     // レート制限カウンターをストレージから復元
     await loadRateLimitFromStorage();
@@ -3952,7 +3968,7 @@
   // ===== 音声設定モーダル =====
 
   let soundSettingsModal = null;
-  let presetSounds = null;
+  // presetSounds はファイル先頭で宣言済み
   let soundSettings = null;
 
   const SOUND_LABELS = {
