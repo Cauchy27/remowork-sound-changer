@@ -8,7 +8,7 @@
 
   const DETECTION_INTERVAL = 10000; // 10秒ごとにチェック（画像URL変更検知用）
   const NOTIFICATION_COOLDOWN = 300000; // 同じ人からの通知は5分間抑制
-  const PHOTO_INTERVAL = 300; // 写真撮影間隔（5分 = 300秒）
+  const PHOTO_INTERVAL = 290; // 写真撮影間隔（4分50秒）- Remoworkより少し早めにカウントダウン終了
 
   // 検出済みの画像URLを記録（重複検出防止）
   const processedImages = new Map();
