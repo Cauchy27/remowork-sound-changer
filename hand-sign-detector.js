@@ -1495,7 +1495,6 @@
   // 文字起こし関連（ページコンテキスト inject.js 経由）
   let transcriptText = '';
   let isTranscribing = false;
-  let selectedMicDeviceId = ''; // 選択されたマイクデバイスID
 
   // Whisper文字起こし関連（相手の声）
   let whisperSettings = { enabled: false, apiKey: '', language: 'ja' };
@@ -1704,12 +1703,9 @@
                   <button class="rsc-copy-btn" data-target="transcript" title="コピー">📋</button>
                 </div>
               </div>
-              <div class="rsc-mic-selector">
-                <label class="rsc-mic-label">🎤 自分のマイク:</label>
-                <select class="rsc-mic-select">
-                  <option value="">読み込み中...</option>
-                </select>
-                <button class="rsc-mic-refresh" title="デバイス一覧を更新">🔄</button>
+              <div class="rsc-whisper-status-box">
+                <span class="rsc-whisper-label">🎧 相手の声（Whisper）:</span>
+                <span class="rsc-whisper-config-status">確認中...</span>
               </div>
               <div class="rsc-transcription-notice">
                 <div class="rsc-notice-header">
@@ -2326,7 +2322,7 @@
         align-items: center;
         gap: 8px;
       }
-      .rsc-mic-selector {
+      .rsc-whisper-status-box {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -2334,39 +2330,23 @@
         border-bottom: 1px solid rgba(255,255,255,0.1);
         margin-bottom: 8px;
       }
-      .rsc-mic-label {
+      .rsc-whisper-label {
         font-size: 12px;
         color: #a0aec0;
         white-space: nowrap;
       }
-      .rsc-mic-select {
-        flex: 1;
-        background: rgba(0,0,0,0.3);
-        border: 1px solid rgba(255,255,255,0.2);
-        color: #e2e8f0;
-        padding: 6px 10px;
-        border-radius: 6px;
+      .rsc-whisper-config-status {
         font-size: 12px;
-        cursor: pointer;
-        max-width: 280px;
-      }
-      .rsc-mic-select:focus {
-        outline: none;
-        border-color: rgba(99, 102, 241, 0.6);
-      }
-      .rsc-mic-refresh {
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 4px;
+        padding: 4px 8px;
         border-radius: 4px;
-        opacity: 0.7;
-        transition: all 0.2s;
       }
-      .rsc-mic-refresh:hover {
-        opacity: 1;
-        background: rgba(255,255,255,0.1);
+      .rsc-whisper-config-status.enabled {
+        color: #48bb78;
+        background: rgba(72, 187, 120, 0.1);
+      }
+      .rsc-whisper-config-status.disabled {
+        color: #f6ad55;
+        background: rgba(246, 173, 85, 0.1);
       }
       .rsc-transcription-notice {
         background: rgba(255, 193, 7, 0.1);
@@ -2920,9 +2900,9 @@
       // 録音履歴を読み込み（古い録音の自動削除も実行）
       await loadRecordings();
 
-      // マイクデバイス一覧を読み込み
-      await loadMicrophoneDevices();
-      setupMicSelectorListeners();
+      // Whisper設定状態を表示
+      await updateWhisperConfigStatus();
+      setupNoticeListeners();
     }
 
     // 保存された高さを復元
@@ -3248,12 +3228,9 @@
       // ストリームを保持するリスト
       const streamsToRelease = [];
 
-      // マイク（選択されたデバイスを使用）
+      // マイク（デフォルトを使用）
       try {
-        const audioConstraints = selectedMicDeviceId
-          ? { deviceId: { exact: selectedMicDeviceId } }
-          : true;
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamsToRelease.push(micStream);
         const micSource = audioContext.createMediaStreamSource(micStream);
         micSource.connect(audioDestination);
@@ -3362,11 +3339,11 @@
     updateTranscriptDisplay('文字起こしを開始しています...');
     transcriptText = '';
 
-    // inject.js にイベントを送信（選択されたデバイスIDを含める）
+    // inject.js にイベントを送信（デフォルトマイクを使用）
     window.dispatchEvent(new CustomEvent('remowork-transcription-start', {
-      detail: { deviceId: selectedMicDeviceId }
+      detail: {}
     }));
-    console.log('[HandSign] Transcription start requested with device:', selectedMicDeviceId || 'default');
+    console.log('[HandSign] Transcription start requested with default mic');
   }
 
   /**
@@ -3431,106 +3408,40 @@
   }
 
   /**
-   * マイクデバイス一覧を取得して表示
+   * Whisper設定状態を表示
    */
-  async function loadMicrophoneDevices() {
-    const micSelect = toolsModal?.querySelector('.rsc-mic-select');
-    if (!micSelect) return;
+  async function updateWhisperConfigStatus() {
+    const statusEl = toolsModal?.querySelector('.rsc-whisper-config-status');
+    if (!statusEl) return;
 
     try {
-      // まずマイクの許可を取得（許可がないとラベルが取得できない）
-      await navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => stream.getTracks().forEach(track => track.stop()))
-        .catch(() => {});
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter(d => d.kind === 'audioinput');
-
-      micSelect.innerHTML = '';
-
-      // デフォルトオプション
-      const defaultOption = document.createElement('option');
-      defaultOption.value = '';
-      defaultOption.textContent = 'デフォルトマイク';
-      micSelect.appendChild(defaultOption);
-
-      // 各デバイス
-      audioInputs.forEach((device, index) => {
-        const option = document.createElement('option');
-        option.value = device.deviceId;
-        option.textContent = device.label || `マイク ${index + 1}`;
-        micSelect.appendChild(option);
-      });
-
-      // 保存された設定を復元
-      const savedDeviceId = await loadSavedMicDevice();
-      if (savedDeviceId) {
-        const exists = audioInputs.some(d => d.deviceId === savedDeviceId);
-        if (exists) {
-          micSelect.value = savedDeviceId;
-          selectedMicDeviceId = savedDeviceId;
+      const response = await chrome.runtime.sendMessage({ type: 'GET_WHISPER_SETTINGS' });
+      if (response && response.success && response.data) {
+        const { enabled, apiKey } = response.data;
+        if (enabled && apiKey) {
+          statusEl.textContent = '✓ 有効（録音に含まれます）';
+          statusEl.className = 'rsc-whisper-config-status enabled';
+        } else {
+          statusEl.textContent = '未設定（ポップアップで設定）';
+          statusEl.className = 'rsc-whisper-config-status disabled';
         }
+      } else {
+        statusEl.textContent = '未設定（ポップアップで設定）';
+        statusEl.className = 'rsc-whisper-config-status disabled';
       }
-
-      console.log('[HandSign] Loaded', audioInputs.length, 'audio input devices');
     } catch (error) {
-      console.error('[HandSign] Failed to load microphone devices:', error);
-      micSelect.innerHTML = '<option value="">デバイス取得に失敗</option>';
+      statusEl.textContent = '確認できません';
+      statusEl.className = 'rsc-whisper-config-status disabled';
     }
   }
 
   /**
-   * 保存されたマイクデバイスIDを読み込み
+   * 注意書きのイベントリスナーを設定
    */
-  async function loadSavedMicDevice() {
-    return new Promise((resolve) => {
-      if (!isExtensionContextValid()) {
-        resolve('');
-        return;
-      }
-      chrome.storage.local.get(['selectedMicDeviceId'], (result) => {
-        resolve(result.selectedMicDeviceId || '');
-      });
-    });
-  }
-
-  /**
-   * 選択されたマイクデバイスIDを保存
-   */
-  function saveMicDevice(deviceId) {
-    if (!isExtensionContextValid()) return;
-    chrome.storage.local.set({ selectedMicDeviceId: deviceId });
-  }
-
-  /**
-   * マイクデバイス選択UIのイベントリスナーを設定
-   */
-  function setupMicSelectorListeners() {
-    const micSelect = toolsModal?.querySelector('.rsc-mic-select');
-    const micRefresh = toolsModal?.querySelector('.rsc-mic-refresh');
+  function setupNoticeListeners() {
     const noticeHeader = toolsModal?.querySelector('.rsc-notice-header');
     const noticeToggle = toolsModal?.querySelector('.rsc-notice-toggle');
     const noticeContent = toolsModal?.querySelector('.rsc-notice-content');
-
-    if (micSelect) {
-      micSelect.addEventListener('change', (e) => {
-        selectedMicDeviceId = e.target.value;
-        saveMicDevice(selectedMicDeviceId);
-        console.log('[HandSign] Selected mic device:', selectedMicDeviceId || 'default');
-
-        // 文字起こし中なら再起動
-        if (isTranscribing) {
-          stopTranscription();
-          setTimeout(() => startTranscription(), 500);
-        }
-      });
-    }
-
-    if (micRefresh) {
-      micRefresh.addEventListener('click', () => {
-        loadMicrophoneDevices();
-      });
-    }
 
     // 注意書きの開閉トグル
     if (noticeHeader && noticeToggle && noticeContent) {
