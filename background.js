@@ -1065,7 +1065,58 @@ async function transcribeWithWhisper(audioBase64, apiKey, language = 'ja') {
   }
 
   const text = await response.text();
-  return text.trim();
+  return filterWhisperHallucinations(text.trim());
+}
+
+/**
+ * Whisperの幻覚（無音時の誤認識）をフィルタリング
+ * @param {string} text - Whisperの出力テキスト
+ * @returns {string} フィルタリング後のテキスト
+ */
+function filterWhisperHallucinations(text) {
+  if (!text) return '';
+
+  // 無音時にWhisperが出力しがちな定型フレーズ（部分一致）
+  const hallucinationPatterns = [
+    'ご視聴ありがとう',
+    '最後までご覧いただき',
+    '最後まで視聴',
+    'チャンネル登録',
+    'グッドボタン',
+    '高評価',
+    'コメント欄',
+    '次回もお楽しみ',
+    'ご覧いただきありがとう',
+    'お楽しみに',
+    '以上で終わります',
+    'ご視聴いただき',
+    '本当にありがとう',
+    'またね',
+    'バイバイ',
+    'See you',
+    'Thank you for watching',
+    'Thanks for watching',
+    'Subscribe',
+    'Like and subscribe'
+  ];
+
+  // 各行をチェックしてフィルタリング
+  const lines = text.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmedLine = line.trim();
+    if (!trimmedLine) return false;
+
+    // 定型フレーズを含む行を除外
+    for (const pattern of hallucinationPatterns) {
+      if (trimmedLine.includes(pattern)) {
+        console.log('[Whisper] Filtered hallucination:', trimmedLine);
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return filteredLines.join('\n');
 }
 
 /**
