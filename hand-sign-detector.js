@@ -1995,10 +1995,14 @@
         border: none;
         border-radius: 8px;
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         transition: all 0.2s;
         white-space: nowrap;
+        text-shadow:
+          1px 1px 2px rgba(0, 0, 0, 0.5),
+          -1px -1px 2px rgba(0, 0, 0, 0.3),
+          0 0 4px rgba(0, 0, 0, 0.4);
       }
       .rsc-capture-wave {
         background: linear-gradient(135deg, #667eea, #764ba2);
