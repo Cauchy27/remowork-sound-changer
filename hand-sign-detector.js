@@ -2206,7 +2206,7 @@
   };
 
   /**
-   * 7角形レーダーチャートをSVGで作成（数値ラベル付き、感情別カラー）
+   * 6角形レーダーチャートをSVGで作成（neutral除外、数値ラベル付き、感情別カラー）
    * @param {Object} expressions - 感情スコア
    * @param {string} dominant - ドミナント感情
    * @param {boolean} isLarge - 大きいサイズ（モーダル用）
@@ -2221,26 +2221,29 @@
     // ドミナント感情に応じた色を取得
     const colors = EMOTION_COLORS[dominant] || EMOTION_COLORS.neutral;
 
-    // 7つの感情の順序（12時の位置から時計回り）
-    const emotions = ['happy', 'surprised', 'fearful', 'sad', 'disgusted', 'angry', 'neutral'];
+    // 6つの感情の順序（neutral除外、12時の位置から時計回り）
+    const emotions = ['happy', 'surprised', 'fearful', 'sad', 'disgusted', 'angry'];
     const emotionLabels = {
       happy: 'Happy',
       surprised: 'Surprised',
       fearful: 'Fearful',
       sad: 'Sad',
       disgusted: 'Disgusted',
-      angry: 'Angry',
-      neutral: 'Neutral'
+      angry: 'Angry'
     };
 
     const points = [];
     const dataPoints = [];
     const labels = [];
 
+    // neutral以外の感情の最大値を取得（最小1で0除算を防ぐ）
+    const scores = emotions.map(e => (expressions && expressions[e]) || 0);
+    const maxScore = Math.max(1, ...scores);
+
     emotions.forEach((emotion, i) => {
-      const angle = (Math.PI * 2 * i / 7) - Math.PI / 2; // 12時から開始
-      const score = expressions[emotion] || 0;
-      const dataRadius = radius * (score / 100);
+      const angle = (Math.PI * 2 * i / 6) - Math.PI / 2; // 12時から開始（6角形）
+      const score = (expressions && expressions[emotion]) || 0;
+      const dataRadius = radius * (score / maxScore); // 最大値を基準にスケール
 
       // 外枠の頂点
       points.push({
@@ -2332,20 +2335,24 @@
       membersByUrl.get(member.imageUrl).push(member);
     }
 
-    // 各URLに対して処理
+    // 各URLに対して処理（同じURLは最初の1人のみ表示）
     for (const [url, urlMembers] of membersByUrl.entries()) {
       if (expressionResultCache.has(url)) {
-        // キャッシュがあるので再分析不要、全員をキャッシュ済みとして追加
+        // キャッシュがあるので再分析不要、最初の1人のみ表示対象
         const cachedResult = expressionResultCache.get(url);
-        for (const member of urlMembers) {
-          membersWithCache.push({ member, result: cachedResult });
+        membersWithCache.push({ member: urlMembers[0], result: cachedResult });
+        // 2人目以降はオーバーレイを削除
+        for (let i = 1; i < urlMembers.length; i++) {
+          const existing = urlMembers[i].element?.querySelector('.rsc-expression-overlay');
+          if (existing) existing.remove();
         }
       } else {
-        // 新しいURL、最初の1人だけ分析対象に
+        // 新しいURL、最初の1人だけ分析対象に（2人目以降は表示しない）
         membersToAnalyze.push(urlMembers[0]);
-        // 残りは分析後にキャッシュから取得（pendingUrl付き）
+        // 2人目以降はオーバーレイを削除
         for (let i = 1; i < urlMembers.length; i++) {
-          membersWithCache.push({ member: urlMembers[i], result: null, pendingUrl: url });
+          const existing = urlMembers[i].element?.querySelector('.rsc-expression-overlay');
+          if (existing) existing.remove();
         }
       }
     }
@@ -2371,17 +2378,12 @@
       }
     }
 
-    // キャッシュ済みメンバー（同じURL含む）にオーバーレイを表示
-    for (const { member, result, pendingUrl } of membersWithCache) {
-      // pendingUrlがある場合は分析後のキャッシュから取得
-      const actualResult = result || (pendingUrl ? expressionResultCache.get(pendingUrl) : null);
-
-      if (member.element && actualResult && actualResult.success) {
-        // pendingUrlがある場合は常に更新（同じURLの2人目以降）
-        // それ以外は既にオーバーレイがあればスキップ
+    // キャッシュ済みメンバー（各URLの最初の1人のみ）にオーバーレイを表示
+    for (const { member, result } of membersWithCache) {
+      if (member.element && result && result.success) {
         const existing = member.element.querySelector('.rsc-expression-overlay');
-        if (pendingUrl || !existing) {
-          showExpressionOverlay(member.element, actualResult.expressions, actualResult.dominant, member.name);
+        if (!existing) {
+          showExpressionOverlay(member.element, result.expressions, result.dominant, member.name);
         }
       }
     }
