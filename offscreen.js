@@ -723,8 +723,15 @@ async function analyzeExpression(imageData) {
     );
 
     // 顔検出 + 表情分析
+    // TinyFaceDetectorOptions:
+    //   inputSize: 検出グリッドサイズ (128, 160, 224, 320, 416, 512, 608) - 小さいほど高速、大きいほど精度向上
+    //   scoreThreshold: 検出閾値 (0-1) - 低いほど検出されやすい
+    const detectorOptions = new faceapi.TinyFaceDetectorOptions({
+      inputSize: 416,      // 画像サイズ640pxに合わせて大きめに設定（精度優先）
+      scoreThreshold: 0.05 // 検出閾値を非常に低く設定（ほぼ全て検出）
+    });
     const detections = await faceapi
-      .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions())
+      .detectAllFaces(canvas, detectorOptions)
       .withFaceExpressions();
 
     if (!detections || detections.length === 0) {

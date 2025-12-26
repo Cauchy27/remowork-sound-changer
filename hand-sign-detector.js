@@ -2022,6 +2022,73 @@
   };
 
   /**
+   * 画像の明るさ・コントラストを自動調整（逆光・暗い画像対応）
+   * ガンマ補正 + コントラストストレッチングで顔検出しやすくする
+   */
+  function autoAdjustBrightnessContrast(imageData) {
+    const data = imageData.data;
+    const len = data.length;
+
+    // 輝度のヒストグラムを計算
+    let minLum = 255;
+    let maxLum = 0;
+    let sumLum = 0;
+    let count = 0;
+
+    for (let i = 0; i < len; i += 4) {
+      // 輝度計算 (ITU-R BT.601)
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      minLum = Math.min(minLum, lum);
+      maxLum = Math.max(maxLum, lum);
+      sumLum += lum;
+      count++;
+    }
+
+    const avgLum = sumLum / count;
+    const range = maxLum - minLum;
+
+    // 常に調整を適用（逆光や暗い画像に対応）
+    // ガンマ値: 暗いほど低く（明るくする）、明るければ1.0に近づける
+    let gamma = 1.0;
+    if (avgLum < 60) {
+      gamma = 0.4; // 非常に暗い（逆光など）
+    } else if (avgLum < 100) {
+      gamma = 0.6; // 暗め
+    } else if (avgLum < 130) {
+      gamma = 0.8; // やや暗め
+    }
+
+    // コントラストストレッチングのパラメータ
+    const targetMin = 10;
+    const targetMax = 245;
+    const scale = range > 20 ? (targetMax - targetMin) / range : 2.0;
+
+    // ガンマ補正用ルックアップテーブルを作成
+    const gammaLUT = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) {
+      gammaLUT[i] = Math.round(255 * Math.pow(i / 255, gamma));
+    }
+
+    for (let i = 0; i < len; i += 4) {
+      // RGB各チャンネルを調整
+      for (let c = 0; c < 3; c++) {
+        let val = data[i + c];
+        // 1. コントラストストレッチング
+        val = (val - minLum) * scale + targetMin;
+        val = Math.max(0, Math.min(255, val));
+        // 2. ガンマ補正（暗い部分を明るく）
+        val = gammaLUT[Math.round(val)];
+        data[i + c] = val;
+      }
+      // アルファは変更しない
+    }
+
+    if (gamma < 1.0 || range < 150) {
+      console.log(`[HandSign] Image adjusted: avgLum=${avgLum.toFixed(1)}, range=${range.toFixed(1)}, gamma=${gamma}`);
+    }
+  }
+
+  /**
    * 表情分析を実行（オフスクリーンAPI経由 - ハンドサインと同様）
    */
   async function analyzeExpression(member) {
@@ -2031,8 +2098,8 @@
       // 画像をCanvasに読み込み
       const originalCanvas = await loadImageToCanvas(member.imageUrl);
 
-      // 画像を縮小してメッセージサイズを削減（最大256px）
-      const maxSize = 256;
+      // 画像サイズ（顔検出精度向上のため大きめに設定）
+      const maxSize = 640;
       const scale = Math.min(maxSize / originalCanvas.width, maxSize / originalCanvas.height, 1);
       const width = Math.floor(originalCanvas.width * scale);
       const height = Math.floor(originalCanvas.height * scale);
@@ -2043,15 +2110,19 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(originalCanvas, 0, 0, width, height);
 
+      // 画像の明るさ・コントラストを自動調整（暗い顔の検出精度向上）
       const imageData = ctx.getImageData(0, 0, width, height);
+      autoAdjustBrightnessContrast(imageData);
+      ctx.putImageData(imageData, 0, 0);
+      const adjustedImageData = ctx.getImageData(0, 0, width, height);
 
       // オフスクリーンに画像データを送信（ハンドサインと同じ方法）
       const result = await chrome.runtime.sendMessage({
         type: 'ANALYZE_EXPRESSION',
         imageData: {
-          data: Array.from(imageData.data),
-          width: imageData.width,
-          height: imageData.height
+          data: Array.from(adjustedImageData.data),
+          width: adjustedImageData.width,
+          height: adjustedImageData.height
         }
       });
 
