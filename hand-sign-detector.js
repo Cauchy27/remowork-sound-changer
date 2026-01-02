@@ -1730,21 +1730,21 @@
   function checkMyImageChange() {
     const currentUrl = getMyImageUrl();
     if (currentUrl && lastMyImageUrl && currentUrl !== lastMyImageUrl) {
-      // 留守モード中は常に次の画像をランダムに選択
-      if (isAwayMode) {
-        console.log('[HandSign] Away mode: image changed, selecting random image for next capture');
+      // 留守モード中かつシステム撮影タイミング（残り1秒以下）で画像変更
+      // = 次の画像をランダムに選択してリセット
+      if (isAwayMode && remainingSeconds <= 1) {
+        console.log('[HandSign] Away mode: image changed at capture timing, selecting random image for next capture');
         enableVirtualCameraRandom();
-        remainingSeconds = PHOTO_INTERVAL;
-        updateTimerDisplay();
-      } else if (activeHandSignType) {
-        // ハンドサインがアクティブな場合は撮影完了とみなして解除
-        console.log('[HandSign] Image changed with active hand sign, clearing selection');
+        resetTimer();
+      } else if (activeHandSignType && remainingSeconds <= 1) {
+        // ハンドサインがアクティブかつシステム撮影タイミング（残り1秒以下）で画像変更
+        // = ハンドサイン送信完了とみなして解除
+        console.log('[HandSign] Image changed with active hand sign at capture timing, clearing selection');
         showTimerToast(`${getGestureEmoji(activeHandSignType)} 送信完了！通常カメラに戻りました`);
         activeHandSignType = null;
         timerElement.querySelectorAll('.rsc-send-btn').forEach(b => b.classList.remove('rsc-active'));
         disableVirtualCamera();
-        remainingSeconds = PHOTO_INTERVAL;
-        updateTimerDisplay();
+        resetTimer();
       } else if (remainingSeconds <= 1) {
         // 残り1秒以下の時のみリセット（再撮影などの通常サイクル外はスキップ）
         console.log('[HandSign] My image changed within 1s margin, resetting timer');
