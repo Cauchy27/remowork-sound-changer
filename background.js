@@ -344,6 +344,11 @@ async function saveSettings(settings) {
  * メッセージハンドラー
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // オフスクリーン宛のメッセージは無視（自分宛ではない）
+  if (message.target === 'offscreen') {
+    return false;
+  }
+
   handleMessage(message)
     .then(sendResponse)
     .catch((error) => sendResponse({ success: false, error: error.message }));
@@ -480,6 +485,27 @@ async function handleMessage(message) {
         audioData: message.audioData
       });
       return mp3Result;
+
+    // MP3変換（チャンク分割転送）
+    case 'CONVERT_TO_MP3_CHUNK':
+      const mp3ChunkResult = await sendToOffscreen({
+        type: 'CONVERT_TO_MP3_CHUNK',
+        sessionId: message.sessionId,
+        chunkIndex: message.chunkIndex,
+        totalChunks: message.totalChunks,
+        chunkData: message.chunkData,
+        isLast: message.isLast
+      });
+      return mp3ChunkResult;
+
+    // MP3変換結果のチャンク取得
+    case 'GET_MP3_RESULT_CHUNK':
+      const mp3ResultChunk = await sendToOffscreen({
+        type: 'GET_MP3_RESULT_CHUNK',
+        sessionId: message.sessionId,
+        chunkIndex: message.chunkIndex
+      });
+      return mp3ResultChunk;
 
     // LLM設定
     case 'GET_LLM_SETTINGS':

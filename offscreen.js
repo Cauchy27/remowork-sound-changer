@@ -389,6 +389,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
 
+    // MP3変換（チャンク分割転送）
+    case 'CONVERT_TO_MP3_CHUNK':
+      handleMp3Chunk(message).then(result => {
+        sendResponse(result);
+      });
+      return true;
+
+    // MP3変換結果のチャンク取得
+    case 'GET_MP3_RESULT_CHUNK':
+      sendResponse(getMp3ResultChunk(message));
+      return true;
+
     default:
       return false;
   }
@@ -814,6 +826,9 @@ async function analyzeExpression(imageData) {
 // MP3変換機能 (lamejs)
 // =============================================
 
+// チャンク転送用のセッション管理
+const mp3ChunkSessions = new Map();
+
 /**
  * WebM/Opus BlobをMP3に変換
  * @param {ArrayBuffer} audioData - WebM形式の音声データ
@@ -908,6 +923,134 @@ function floatTo16BitPCM(float32Array) {
     int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
   return int16Array;
+}
+
+// MP3変換結果を一時保存（チャンク取得用）
+const mp3ResultSessions = new Map();
+
+/**
+ * MP3変換用のチャンクを受信・蓄積
+ * 全チャンク受信後にMP3変換を実行
+ * @param {Object} message - チャンクメッセージ
+ * @returns {Object} 処理結果
+ */
+async function handleMp3Chunk(message) {
+  const { sessionId, chunkIndex, totalChunks, chunkData, isLast } = message;
+
+  console.log(`[Offscreen] Received chunk ${chunkIndex + 1}/${totalChunks} for session ${sessionId}`);
+
+  // セッションが存在しない場合は作成
+  if (!mp3ChunkSessions.has(sessionId)) {
+    mp3ChunkSessions.set(sessionId, {
+      chunks: new Array(totalChunks),
+      receivedCount: 0,
+      totalSize: 0
+    });
+  }
+
+  const session = mp3ChunkSessions.get(sessionId);
+
+  // チャンクを保存
+  session.chunks[chunkIndex] = new Uint8Array(chunkData);
+  session.receivedCount++;
+  session.totalSize += chunkData.length;
+
+  console.log(`[Offscreen] Session ${sessionId}: ${session.receivedCount}/${totalChunks} chunks received`);
+
+  // 最終チャンクでない場合は確認応答のみ返す
+  if (!isLast) {
+    return { success: true, received: chunkIndex };
+  }
+
+  // 全チャンク受信完了、結合してMP3変換
+  console.log(`[Offscreen] All chunks received, total size: ${session.totalSize}`);
+
+  try {
+    // チャンクを結合
+    const combinedArray = new Uint8Array(session.totalSize);
+    let offset = 0;
+    for (const chunk of session.chunks) {
+      combinedArray.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // セッションをクリーンアップ
+    mp3ChunkSessions.delete(sessionId);
+
+    // MP3変換を実行
+    console.log(`[Offscreen] Starting MP3 conversion...`);
+    const result = await convertToMp3(combinedArray.buffer);
+
+    if (!result.success) {
+      return result;
+    }
+
+    // 結果サイズをチェック（10MB以下なら直接返す）
+    const RESPONSE_CHUNK_SIZE = 10 * 1024 * 1024;
+    if (result.mp3Data.length <= RESPONSE_CHUNK_SIZE) {
+      console.log(`[Offscreen] MP3 size ${result.mp3Data.length} bytes, returning directly`);
+      return result;
+    }
+
+    // 大きい場合はチャンク分割で返す準備
+    const mp3Array = new Uint8Array(result.mp3Data);
+    const responseChunks = Math.ceil(mp3Array.length / RESPONSE_CHUNK_SIZE);
+
+    console.log(`[Offscreen] MP3 size ${mp3Array.length} bytes, splitting into ${responseChunks} response chunks`);
+
+    // 結果を保存
+    mp3ResultSessions.set(sessionId, {
+      mp3Data: mp3Array,
+      totalChunks: responseChunks,
+      chunkSize: RESPONSE_CHUNK_SIZE
+    });
+
+    return {
+      success: true,
+      chunkedResponse: true,
+      sessionId: sessionId,
+      totalChunks: responseChunks,
+      totalSize: mp3Array.length
+    };
+  } catch (error) {
+    mp3ChunkSessions.delete(sessionId);
+    console.error('[Offscreen] Chunked MP3 conversion error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * MP3変換結果のチャンクを取得
+ * @param {Object} message - 取得リクエスト
+ * @returns {Object} チャンクデータ
+ */
+function getMp3ResultChunk(message) {
+  const { sessionId, chunkIndex } = message;
+
+  const session = mp3ResultSessions.get(sessionId);
+  if (!session) {
+    return { success: false, error: 'Session not found' };
+  }
+
+  const start = chunkIndex * session.chunkSize;
+  const end = Math.min(start + session.chunkSize, session.mp3Data.length);
+  const chunk = session.mp3Data.slice(start, end);
+  const isLast = chunkIndex === session.totalChunks - 1;
+
+  console.log(`[Offscreen] Sending MP3 result chunk ${chunkIndex + 1}/${session.totalChunks}, size: ${chunk.length}`);
+
+  // 最後のチャンクならセッションをクリーンアップ
+  if (isLast) {
+    mp3ResultSessions.delete(sessionId);
+    console.log(`[Offscreen] MP3 result session ${sessionId} cleaned up`);
+  }
+
+  return {
+    success: true,
+    chunkData: Array.from(chunk),
+    chunkIndex: chunkIndex,
+    isLast: isLast
+  };
 }
 
 // 初期化を開始

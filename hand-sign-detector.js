@@ -1264,7 +1264,43 @@
   function setupSendButtons() {
     const buttons = timerElement.querySelectorAll('.rsc-send-btn');
     buttons.forEach(btn => {
+      let longPressTimer = null;
+      let isLongPress = false;
+
+      const startLongPress = () => {
+        isLongPress = false;
+        longPressTimer = setTimeout(() => {
+          isLongPress = true;
+          const type = btn.dataset.type;
+          // 長押しで解除（有効なボタンの場合のみ）
+          if (activeHandSignType === type) {
+            activeHandSignType = null;
+            btn.classList.remove('rsc-active');
+            disableVirtualCamera();
+            showTimerToast('通常カメラに戻りました');
+          }
+        }, 500);
+      };
+
+      const cancelLongPress = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+
+      btn.addEventListener('mousedown', startLongPress);
+      btn.addEventListener('touchstart', startLongPress, { passive: true });
+      btn.addEventListener('mouseup', cancelLongPress);
+      btn.addEventListener('mouseleave', cancelLongPress);
+      btn.addEventListener('touchend', cancelLongPress);
+      btn.addEventListener('touchcancel', cancelLongPress);
+
       btn.addEventListener('click', () => {
+        if (isLongPress) {
+          isLongPress = false;
+          return;
+        }
         const type = btn.dataset.type;
         toggleHandSignSend(type, btn);
       });
@@ -1498,11 +1534,9 @@
     }
 
     if (activeHandSignType === type) {
-      // 無効化
-      activeHandSignType = null;
-      btn.classList.remove('rsc-active');
-      disableVirtualCamera();
-      showTimerToast('通常カメラに戻りました');
+      // 同じボタンを再度押した場合 → 画像をランダムに切り替え（解除しない）
+      enableVirtualCamera(type);
+      showTimerToast(`${getGestureEmoji(type)} 画像を切り替えました`);
     } else {
       // 有効化
       // 他のボタンをリセット
