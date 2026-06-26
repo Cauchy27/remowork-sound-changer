@@ -842,7 +842,7 @@ async function getLLMSettings() {
       const settings = result.llmSettings || {
         enabled: false,
         provider: 'gemini',
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         apiKey: '',
         customEndpoint: '',
         autoStructure: true,

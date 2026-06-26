@@ -63,7 +63,7 @@ let handSignSettings = {
 let llmSettings = {
   enabled: false,
   provider: 'gemini',
-  model: 'gemini-2.0-flash',
+  model: 'gemini-2.5-flash',
   apiKey: '',
   customEndpoint: '',
   autoStructure: true,
@@ -93,10 +93,9 @@ let statsSettings = {
 // LLMモデルの定義
 const LLM_MODELS = {
   gemini: [
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash（推奨）' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite（軽量）' },
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash（推奨）' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite（軽量・最安）' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash（高性能・高コスト）' }
   ],
   openai: [
     { id: 'gpt-4o-mini', name: 'GPT-4o Mini（推奨）' },
@@ -1532,7 +1531,7 @@ function updateModelList(provider) {
 function updateApiNote(provider) {
   const apiNote = document.getElementById('llm-api-note');
   const notes = {
-    gemini: '⚠️ 文字起こし機能はBraveブラウザでは利用できません（Chromeを推奨）\nGeminiは無料枠で利用可能（15 RPM / 250 RPD）',
+    gemini: '⚠️ 文字起こし機能はBraveブラウザでは利用できません（Chromeを推奨）\nGeminiは無料枠で利用可能（10 RPM / 250 RPD）',
     openai: '⚠️ 文字起こし機能はBraveブラウザでは利用できません（Chromeを推奨）\nOpenAIは従量課金制です',
     claude: '⚠️ 文字起こし機能はBraveブラウザでは利用できません（Chromeを推奨）\nClaudeは従量課金制です',
     custom: '⚠️ 文字起こし機能はBraveブラウザでは利用できません（Chromeを推奨）\nOpenAI互換のエンドポイントを指定してください'
