@@ -7,3 +7,6 @@
 
 # Sound files (cannot be redistributed due to licensing)
 sounds/
+
+# Signing keys
+*.pem
