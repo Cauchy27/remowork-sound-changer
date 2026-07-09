@@ -5,8 +5,9 @@ description: |
   「デバッグ」「バグ」「エラー」「不具合」「動かない」で自動発動。
   問題切り分け、ログ分析、再現手順確認を提供。
 allowed-tools: Read, Grep, Glob, Bash
+execution_type: agent-teams
 version: 1.0.0
-updated: 2024-12-27
+updated: 2026-07-10
 ---
 
 # デバッグスキル (Chrome拡張機能向け)

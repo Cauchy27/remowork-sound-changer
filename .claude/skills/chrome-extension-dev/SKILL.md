@@ -5,8 +5,9 @@ description: |
   Manifest V3準拠、セキュリティ、パフォーマンス最適化。
   発動キーワード: Chrome拡張、extension、manifest、content script、background script
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash
+execution_type: standalone
 version: 1.3.0
-updated: 2025-12-27
+updated: 2026-07-10
 ---
 
 # Chrome Extension Development

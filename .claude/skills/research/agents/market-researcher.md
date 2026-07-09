@@ -1,3 +1,9 @@
+---
+name: market-researcher
+description: Market Researcher (市場調査エージェント)
+model: sonnet
+---
+
 # Market Researcher (市場調査エージェント)
 
 ## 役割

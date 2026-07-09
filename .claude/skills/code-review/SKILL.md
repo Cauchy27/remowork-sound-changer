@@ -5,8 +5,9 @@ description: |
   12視点マトリックスレビュー（3ペルソナ × 4カテゴリ）を実施。
   発動キーワード: レビュー、review、チェック、確認
 allowed-tools: Read, Grep, Glob
+execution_type: agent-teams
 version: 1.2.0
-updated: 2025-12-27
+updated: 2026-07-10
 ---
 
 # Code Review

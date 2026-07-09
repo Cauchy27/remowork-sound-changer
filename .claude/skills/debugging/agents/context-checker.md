@@ -1,3 +1,9 @@
+---
+name: context-checker
+description: Context Checker (コンテキスト間通信確認エージェント)
+model: sonnet
+---
+
 # Context Checker (コンテキスト間通信確認エージェント)
 
 ## 役割

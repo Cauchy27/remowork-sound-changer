@@ -5,8 +5,9 @@ description: |
   今後実装したい機能や改善案を記録・追跡する。
   発動キーワード: ウィッシュリスト、wishlist、今後、要望、改善案、TODO
 allowed-tools: Read, Edit, Write
+execution_type: standalone
 version: 1.0.0
-updated: 2025-12-27
+updated: 2026-07-10
 ---
 
 # Wishlist Management

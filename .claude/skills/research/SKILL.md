@@ -5,8 +5,9 @@ description: |
   「調査」「リサーチ」「検索」「市場調査」「技術調査」「法的要件」で自動発動。
   技術調査、市場調査、法的調査、セキュリティ調査の4カテゴリをカバー。
 allowed-tools: Read, Grep, Glob, WebSearch, WebFetch
+execution_type: agent-teams
 version: 1.0.0
-updated: 2024-12-27
+updated: 2026-07-10
 ---
 
 # リサーチスキル (Research Skill)

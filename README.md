@@ -1,5 +1,22 @@
 # Remowork Sound Changer
 
+
+## AI支援構成（2026-07-10）
+
+`.claude/skills` を正本、`.agents/skills` を Codex / Antigravity 参照ラッパーとして運用する。
+
+| 項目 | 現状 |
+|------|------|
+| 共通スキル | 8件（standalone 4 / agent-teams 3 / subagent 1） |
+| Codex / Antigravity ラッパー | 8件 |
+| スキル内サブエージェント | 7件（sonnet 7） |
+| ペルソナエージェント | 0件（なし） |
+
+- 全 `SKILL.md` は `execution_type` を `standalone` / `agent-teams` / `subagent` / `hybrid` のいずれかで指定する。
+- スキル内サブエージェント（`.claude/skills/*/agents/*.md`）は frontmatter の `model:` で実効モデルを明示する。
+- ラッパー再生成: `bash scripts/generate-agent-wrappers.sh`
+- ラッパー同期確認: `bash scripts/generate-agent-wrappers.sh --check`
+
 > **[Remowork](https://remowork.biz/)** - バーチャルオフィスで、チームをもっと近くに。
 
 Remoworkの着信音・通知音をカスタマイズするChrome拡張機能です。

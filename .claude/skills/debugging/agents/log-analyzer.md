@@ -1,3 +1,9 @@
+---
+name: log-analyzer
+description: Log Analyzer (ログ分析エージェント)
+model: sonnet
+---
+
 # Log Analyzer (ログ分析エージェント)
 
 ## 役割

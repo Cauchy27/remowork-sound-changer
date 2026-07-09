@@ -5,8 +5,9 @@ description: |
   「実装したい」「機能を追加」「バグを直す」「〇〇を作る」で自動発動。
   要件が曖昧な場合はしつこく質問し、仮定で進めない。
 allowed-tools: Read, Grep, Glob, Write
+execution_type: subagent
 version: 1.0.0
-updated: 2024-12-27
+updated: 2026-07-10
 ---
 
 # 計画・仕様策定スキル (Chrome拡張機能向け)

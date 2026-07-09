@@ -1,3 +1,9 @@
+---
+name: security-researcher
+description: Security Researcher (セキュリティ調査エージェント)
+model: sonnet
+---
+
 # Security Researcher (セキュリティ調査エージェント)
 
 ## 役割

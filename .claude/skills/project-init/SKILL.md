@@ -5,8 +5,9 @@ description: |
   ディレクトリ構造、必須ファイル、CLAUDE.md設定を行う。
   発動キーワード: 新規プロジェクト、project init、作成、新しい拡張機能
 allowed-tools: Read, Edit, Write, Bash, Glob
+execution_type: standalone
 version: 1.1.0
-updated: 2025-12-27
+updated: 2026-07-10
 ---
 
 # Project Initialization

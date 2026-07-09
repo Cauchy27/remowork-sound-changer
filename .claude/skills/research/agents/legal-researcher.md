@@ -1,3 +1,9 @@
+---
+name: legal-researcher
+description: Legal Researcher (法的調査エージェント)
+model: sonnet
+---
+
 # Legal Researcher (法的調査エージェント)
 
 ## 役割

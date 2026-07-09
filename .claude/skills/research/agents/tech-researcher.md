@@ -1,3 +1,9 @@
+---
+name: tech-researcher
+description: Tech Researcher (技術調査エージェント)
+model: sonnet
+---
+
 # Tech Researcher (技術調査エージェント)
 
 ## 役割

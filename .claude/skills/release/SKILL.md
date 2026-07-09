@@ -5,8 +5,9 @@ description: |
   バージョン更新、CHANGELOG追記、コードレビュー、git push、ZIP作成を行う。
   発動キーワード: リリース、release、プッシュ、push、zip、デプロイ
 allowed-tools: Read, Edit, Write, Bash, Glob
+execution_type: standalone
 version: 1.1.0
-updated: 2025-12-27
+updated: 2026-07-10
 ---
 
 # Release / Deploy

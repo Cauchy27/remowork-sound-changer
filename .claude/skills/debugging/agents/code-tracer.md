@@ -1,3 +1,9 @@
+---
+name: code-tracer
+description: Code Tracer (コード追跡エージェント)
+model: sonnet
+---
+
 # Code Tracer (コード追跡エージェント)
 
 ## 役割
