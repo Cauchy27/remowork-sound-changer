@@ -207,11 +207,8 @@ updated: 2026-08-02
 
 | スキル | 用途 |
 |-------|------|
-| [product-brainstorming](../product-brainstorming/SKILL.md) | 新機能アイデアをロードマップ候補に昇格する |
-| [stakeholder-update](../stakeholder-update/SKILL.md) | ロードマップをステークホルダーに報告する |
 | [spec-planning](../spec-planning/SKILL.md) | ロードマップの各アイテムを仕様に落とし込む |
 | [schedule-management](../schedule-management/SKILL.md) | マイルストーンの期限管理（L2）。Phase 6 で日付確定済みテーマを引き渡す |
-| [sprint-planning](../sprint-planning/SKILL.md) | ロードマップ・マイルストーンを実行タスクへ分解する |
 
 ---
 
