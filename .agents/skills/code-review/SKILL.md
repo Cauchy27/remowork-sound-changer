@@ -1,13 +1,15 @@
 ---
 name: code-review
 description: |
-  コードレビューの手順とチェックリスト。
-  12視点マトリックスレビュー（3ペルソナ × 4カテゴリ）を実施。
-  発動キーワード: レビュー、review、チェック、確認
+  フルスタック統合コードレビュースキル。
+  「レビュー」「PRレビュー」「コードを確認」で発動。
+  デザインは design-critique、文書は document-review、エージェント定義は agent-review、
+  スキル構造は internal-structure-review を使用。
+  Claude Code + Codex の2系統並列レビューを実行（Codex は CLI 優先・MCP フォールバック。利用不可時は代替モード）。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: agent-teams
-version: 1.2.0
-updated: 2026-07-10
+version: 2.9.0
+updated: 2026-08-02
 ---
 
 # Code Review
