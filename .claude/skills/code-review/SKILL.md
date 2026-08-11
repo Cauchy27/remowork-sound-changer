@@ -6,10 +6,11 @@ description: |
   デザインは design-critique、文書は document-review、エージェント定義は agent-review、
   スキル構造は internal-structure-review を使用。
   Claude Code + Codex の2系統並列レビューを実行（Codex は CLI 優先・MCP フォールバック。利用不可時は代替モード）。
+  全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
-version: 2.9.0
-updated: 2026-08-02
+version: 2.11.0
+updated: 2026-08-11
 ---
 
 # 統合コードレビュースキル
@@ -337,12 +338,28 @@ Tier 3（Claude Code の `antigravity` ペルソナ）で継続します。同�
 
 ---
 
+## 🔴 横断ゲート: 本質ギャルレビュー（必須・全モード共通・Round 1 先頭）
+
+**モードA/Bへ分岐する前に、[essence-gyaru-review](../essence-gyaru-review/SKILL.md) を必ず1回実行すること。skip不可。**
+
+- モードB の4視点・モードA の13視点の**カウントに含めない独立枠**。目的・意思決定・前提・因果・矛盾・業務上の代償・次アクションの7軸で対象を突く
+- `review-iteration` は本レビューの周回番号（初回1、再レビューごとに加算）と揃える
+- **`code-review` を単体で再実行する場合の `review-iteration` 決定手順**: 同一対象への前回レビューがあれば「前回 `review-iteration` + 1」を使う。前回値は `.tmp/ai-review/gyaru/round-*/report.md` の最大番号等から確認する。前回が存在しない初回は 1 とする
+- 出力先: `.tmp/ai-review/gyaru/round-{review-iteration}/report.md`
+- essence-gyaru-review の Instructions（Task で `essence-gyaru-reviewer` を起動 → `validate_report.py` で構造検証）に従う
+- 全指摘ID（`GYARU-{review-iteration}-{3桁}`）と件数を控え、Round 2（結果統合）・Round 3（fact-check）へそのまま引き渡す
+
+---
+
 ## 実行アーキテクチャ
 
 ### モードA: 2系統並列（Codex 利用可能時）
 
 ```
 [レビュー対象ファイル]
+         |
+         v
+本質ギャルレビュー（横断ゲート・Round 1 先頭・カウント外）
          |
     +----+----+
     |         |
@@ -359,6 +376,9 @@ Claude Code   Codex
 
 ```
 [レビュー対象ファイル]
+         |
+         v
+本質ギャルレビュー（横断ゲート・Round 1 先頭・カウント外）
          |
 +--------+--------+--------+--------+
 |        |        |        |        |
@@ -427,18 +447,18 @@ Task 3: ドキュメント整合性レビュー
 Task 4: ユーザー視点レビュー
 ```
 
-### Step 3: 結果統合
+### Step 3（Round 2）: 結果統合
 
-4つの Task の結果を受け取り、以下のテンプレートで統合結果を出力。
+4つの Task の結果と、横断ゲートで得た本質ギャルレビューの全指摘IDを合わせて、以下のテンプレートで統合結果を出力する。ギャル指摘は4視点/13視点のカウントに含めず、統合レビュー結果に別枠として記載する。
 
 ### Round 3: ファクトチェック（必須）
 
-結果統合（Step 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず [code-review-fact-check スキル](../code-review-fact-check/SKILL.md) を Round 3 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。
+結果統合（Step 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず [code-review-fact-check スキル](../code-review-fact-check/SKILL.md) を Round 3 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。GYARU-* を含む全指摘が検証対象。
 
 ```
-Round 1: Claude Code 4視点並列レビュー（モードB）/ Codex 独立レビュー（モードA）
-Round 2: 結果統合（Step 3, 上記）
-Round 3: code-review-fact-check スキルでファクトチェックを実施 ← 必須・省略禁止
+Round 1: 本質ギャルレビュー（横断ゲート・必須）+ Claude Code 4視点並列レビュー（モードB）/ Codex 独立レビュー（モードA）
+Round 2: 結果統合（Step 3, 上記。ギャル指摘IDも保持）
+Round 3: code-review-fact-check スキルでファクトチェックを実施（GYARU-* を含む全指摘）← 必須・省略禁止
 ```
 
 ファクトチェックで「妥当」と判定された指摘のみを最終 PR コメント・レビュー結果に採用する。詳細な実行手順（4 Phase・4択判定区分・出力テンプレート）は `code-review-fact-check/SKILL.md` を参照。
@@ -565,6 +585,11 @@ Round 3: code-review-fact-check スキルでファクトチェックを実施 �
 | #   | ファイル | 行番号 | 視点 | 内容 |
 | --- | -------- | ------ | ---- | ---- |
 
+### 本質ギャルレビュー（横断ゲート・別枠、4視点/13視点のカウント外）
+
+| #   | 指摘ID | 優先度 | 内容 |
+| --- | ------ | ------ | ---- |
+
 ---
 
 ## 良い点
@@ -668,6 +693,8 @@ Round 3: code-review-fact-check スキルでファクトチェックを実施 �
 
 | バージョン | 日付       | 変更内容                                                                                  |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v2.11.0    | 2026-08-11 | 内部構造レビュー指摘を反映。横断ゲート節に単体再実行時の `review-iteration` 決定手順（前回+1、初回1）を追記。指摘ID表記を `GYARU-{iteration}-{3桁}` から `GYARU-{review-iteration}-{3桁}` へ統一。モードA/BのASCII図に横断ゲートを反映し、「Step 3: 結果統合」見出しを「Step 3（Round 2）: 結果統合」へ改め Round 3 見出しとの非対称を解消 |
+| v2.10.0    | 2026-08-11 | 全モード共通の横断ゲートとして essence-gyaru-review（本質ギャルレビュー）を Round 1 先頭に追加。4視点/13視点のカウント外の独立枠とし、Round 2 統合・Round 3 fact-check（GYARU-* 含む）まで全指摘IDを引き渡す導線を明記 |
 | v2.9.0     | 2026-08-02 | Codex に非対称だった Antigravity（`agy`）の CLI 優先実行規定を追加。「Antigravity レビュー」節（必須試行の判定基準＝デザイン/UI/UX/情報設計を含むレビューは必須・それ以外は任意、Step 0 判定コマンド、CLI未設定時案内、headless 権限モデルの非空チェック注意、禁止事項）を新設し、Tier 3 フォールバックに `subagent_type="antigravity"` の Task() 起動例（`.claude/agents/llm-personas/antigravity.md` を使用・code-review 固有素材は新規作成不要）と「レビューの姿勢」チェックリスト行を追加。詳細手順は `ai-cli-execution` スキルの reference.md §6 に一本化し二重管理を避けた |
 | v2.8.0     | 2026-07-30 | 外部AIツールの実行経路を3層モデル（CLI > MCP > Claude 別視点）へ再定義し、`.claude/docs/ai-cli-execution-policy.md` を新設。Codex=`codex exec`／Antigravity=`agy` を Tier 1、MCP をフォールバックへ降格。CLI 未設定時のセットアップ案内を必須化し、利用不可時は判断を仰がず下位 Tier で自動継続する方針へ統一。モードA の観点割り当て（Codex=正確性/バグ/セキュリティ、Antigravity=UI/UX/情報設計）を明記。allowed-tools に `mcp__codex__codex-reply` を追加 |
 | v2.7.0     | 2026-07-30 | 統一13視点定義に、すり抜けバグの実測から得た検出項目を追加（Auth: アクセスゲート例外の対象確認 / Test Quality: テスト凍結・放置FAIL・実行無効化の検知 / Error Handling: エラーコードの原因一意性 / Business Logic: 画面遷移・導線の仕様適合） |
