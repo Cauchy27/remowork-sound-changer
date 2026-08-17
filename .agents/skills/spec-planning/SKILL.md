@@ -6,8 +6,8 @@ description: |
   要件が曖昧な場合はしつこく質問し、仮定で進めない。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: subagent
-version: 1.0.0
-updated: 2026-07-10
+version: 1.0.1
+updated: 2026-08-17
 ---
 
 # Spec Planning
