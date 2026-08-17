@@ -6,8 +6,8 @@ description: |
   要件が曖昧な場合はしつこく質問し、仮定で進めない。
 allowed-tools: Read, Grep, Glob, Write
 execution_type: subagent
-version: 1.0.0
-updated: 2026-07-10
+version: 1.0.1
+updated: 2026-08-17
 ---
 
 # 計画・仕様策定スキル (Chrome拡張機能向け)
@@ -293,6 +293,7 @@ specドキュメント作成後、必ず以下を実施：
 |--------|------|
 | [chrome-extension-dev](../chrome-extension-dev/SKILL.md) | Chrome拡張開発ガイド |
 | [research](../research/SKILL.md) | 技術調査 |
+| [dual-layer-document](../dual-layer-document/SKILL.md) | 社内向けに人へ渡す資料を「人間の目視サマリー層＋相手のAIに読ませる指示層」の二層で作る（対外資料は適用禁止） |
 
 ---
 
@@ -300,4 +301,5 @@ specドキュメント作成後、必ず以下を実施：
 
 | バージョン | 日付 | 変更内容 |
 |-----------|------|----------|
+| v1.0.1 | 2026-08-17 | dual-layer-document（社内向け資料の二層構成）への参照導線を追加 |
 | v1.0.0 | 2024-12-27 | 初版作成（Chrome拡張向け） |
