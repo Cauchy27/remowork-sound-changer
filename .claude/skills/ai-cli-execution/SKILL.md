@@ -7,8 +7,8 @@ description: |
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Grep, Glob, Bash, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: standalone
-version: 1.1.1
-updated: 2026-08-16
+version: 1.1.4
+updated: 2026-08-19
 ---
 
 # AIツール実行スキル（実CLI3視点・CLI 優先・3層モデル）
@@ -57,17 +57,17 @@ Tier 3: Claude Code の別視点で代替、または Claude Code 自身が親�
 ツール別の実行手順・エラー別対処・利用制限時の対応・プロンプト設計は
 [reference.md](reference.md) を正本とする。必要なステップで読み込むこと（遅延読み込み）。
 
-Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示する
-（設計ルール: [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)）。
+Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示し、その直後に【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra）、続けて【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）を原文のまま必ず含める
+（設計ルール・ブロック原文: [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)）。
 
 ## 関連スキル
 
 | スキル | 用途 |
 |--------|------|
 | [code-review](../code-review/SKILL.md) | Codex 併用の2系統並列レビュー |
-| internal-structure-review（本拠点では未配備） | 3視点（Claude Code / Codex / Antigravity）の実CLI起動手順 |
-| agent-review（本拠点では未配備） | エージェント定義の Codex 独立レビュー |
-| development-orchestration（本拠点では未配備） | 標準開発フローからの利用 |
+| [internal-structure-review](../internal-structure-review/SKILL.md) | 3視点（Claude Code / Codex / Antigravity）の実CLI起動手順 |
+| [agent-review](../agent-review/SKILL.md) | エージェント定義の Codex 独立レビュー |
+| [development-orchestration](../development-orchestration/SKILL.md) | 標準開発フローからの利用 |
 
 ---
 
@@ -75,6 +75,9 @@ Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示�
 
 | バージョン | 日付 | 変更内容 |
 |-----------|------|----------|
+| v1.1.4 | 2026-08-19 | Codex へのプロンプトに【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）を必ず含める絶対ルールを codex-prompt-guideline.md に新設したのに伴い、本ファイル・reference.md §5 へ言及を追記 |
+| v1.1.3 | 2026-08-19 | Codex へのプロンプトに【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を必ず含める絶対ルールを codex-prompt-guideline.md に新設したのに伴い、本ファイル・reference.md §5・ai-cli-execution-policy.md へ言及と正本リンクを追記 |
+| v1.1.2 | 2026-08-17 | `agy --print-timeout` の値を `900` から `15m` へ修正（単位なしの `900` は EXIT=2 でオプション不正となり Antigravity 視点が空出力で失敗していた。2026-08-17 実測で確定） |
 | v1.1.1 | 2026-08-16 | `.claude/docs/ai-cli-execution-policy.md` 未更新（`claude -p` が対象外のまま）に伴う reference.md §1 の引用元不一致を修正。policy.md §1 が「ツールの一般的な強み・CLI起動コマンド」のみを扱い、レビュー観点の割り当ては review-matrix.md が正本である旨を明記する形に揃え、reference.md §1 の要約もその区分に合わせて書き換えた |
 | v1.1.0 | 2026-08-16 | Claude Code（`claude -p`）を対象ツールに追加（従来は Codex/Antigravity のみ）。実測で `claude -p` がネストセッションで OAuth 再認証を要求され失敗するケースを確認し、判定方法と Tier 3 フォールバック手順を reference.md §4/§4.5 に新設。`--allowedTools`（許可リスト）と `--tools`（利用可能ツールの選択）の違いを明記。`codex exec` の trusted directory 制約を追記（§5 Step 0.5）。Codex 利用制限到達時の実測例（復帰日時つき）を追記。`agy` headless の権限モデルを訂正（ファイル読み取りも auto-deny されうると判明。対処を「パス列挙」から「内容をプロンプトへ直接埋め込む」へ修正）。`agy --print-timeout`（既定5分・15分で成功した実績）と `--output-format`（text/json/stream-json）の詳細を追記 |
 | v1.0.0 | 2026-07-30 | docs/ai-cli-execution-policy.md の実行手順をスキル化（配置ポリシー「手順書は Skill へ」準拠）。手順全文は reference.md が正本 |

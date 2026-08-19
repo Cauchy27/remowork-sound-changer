@@ -9,8 +9,8 @@ description: |
   全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
-version: 3.2.0
-updated: 2026-08-16
+version: 3.2.3
+updated: 2026-08-19
 ---
 
 # 統合コードレビュースキル
@@ -136,6 +136,9 @@ Claude Code視点        Codex視点            Antigravity視点
 
 **Antigravity（`agy`）実行時のみ、【対象ファイル】をパスのまま渡さず、内容を `cat` で取得してプロンプトへ直接埋め込むこと。** headless 実行はファイル読み取りが auto-deny されうるため、パスだけでは空出力になる（詳細は後述「Antigravity 視点」節）。
 
+**Codex（`codex exec`）実行時のみ、ゴール文の直後に【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を原文のまま挿入すること。** 詳細・原文は [`.claude/docs/codex-prompt-guideline.md`](../../docs/codex-prompt-guideline.md) を参照（Claude Code / Antigravity 向けには不要）。
+**同じく Codex 実行時のみ、続けて【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）も原文のまま挿入すること。** 原文は同ガイドラインを参照。
+
 3視点とも、下記の Step 0（疎通確認）→ Step 1（レビュー実行、上記プロンプト雛形を埋めて使用）の順で直接実行できる。
 
 ### Claude Code 視点（`claude -p`）
@@ -202,10 +205,10 @@ agy --mode plan --model gemini-3.1-pro-high -p \
 ## 対象ファイルの内容（ツール呼び出しは行わず、ここに埋め込まれた内容だけで判定すること）
 ${AGY_TARGET}
 " \
-  --output-format text --print-timeout 900 > .tmp/ai-review/agy-review.md 2> .tmp/ai-review/agy-review.log; echo "EXIT=$?"
+  --output-format text --print-timeout 15m > .tmp/ai-review/agy-review.md 2> .tmp/ai-review/agy-review.log; echo "EXIT=$?"
 ```
 
-`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--model gemini-3.1-pro-high` を省略すると既定の Flash になり独立視点が薄まる。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 900`（15分）は手順・対象内容を埋め込んだ分プロンプトが長くなるため（既定5分では打ち切られることがある）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
+`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--model gemini-3.1-pro-high` を省略すると既定の Flash になり独立視点が薄まる。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` は手順・対象内容を埋め込んだ分プロンプトが長くなるため指定する（既定5分では打ち切られることがある）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
 
 本スキル固有の点のみ以下に記す（手順詳細は上記コードブロックと ai-cli-execution 参照）。
 
@@ -321,7 +324,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 ### Round 4: ファクトチェック（必須）
 
-結果統合（Round 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず code-review-fact-check スキル（本拠点では未配備） を Round 4 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。GYARU-* を含む全指摘が検証対象。
+結果統合（Round 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず [code-review-fact-check スキル](../code-review-fact-check/SKILL.md) を Round 4 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。GYARU-* を含む全指摘が検証対象。
 
 ファクトチェックで「妥当」と判定された指摘のみを最終 PR コメント・レビュー結果に採用する。詳細な実行手順（4 Phase・4択判定区分・出力テンプレート）は `code-review-fact-check/SKILL.md` を参照。
 
@@ -448,7 +451,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 - CLI 実行手順の正本: [ai-cli-execution](../ai-cli-execution/SKILL.md)
 - バックエンドレビュー: プロジェクト固有のレビュースキル（セットアップ時にパス設定）
 - フロントエンドレビュー: プロジェクト固有のレビュースキル（セットアップ時にパス設定）
-- PRコメント生成（pr-comment スキル・本拠点では未配備）
+- [PRコメント生成](./../pr-comment/SKILL.md)
 
 ---
 
@@ -472,6 +475,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 | 2026-07-30 | 並列レビューの指摘の 60-70% が過剰指摘だった | 実コードを読まず推測で指摘していた | Round 4（旧Round 3）に code-review-fact-check を必須化 |
 | 2026-08-16 | 「13視点」という呼称が `internal-structure-review` の「3視点（誰が見るか）」と衝突し、統合を妨げていた | 観点細目（どう見るか）を視点（誰が見るか）と同じ語で呼んでいた | `.claude/docs/review-matrix.md` を正本として新設し、13項目チェックリストに改称・改名（`agents/code-checklist-13.md`）。視点・観点・裁定ルールを正本参照へ置換 |
 | 2026-08-16 | 用語是正（v3.0.0）直後の全数点検漏れ: 「ここでは再掲しない」と明言した2行後にTierテーブルを再掲する自己矛盾、`agents/codex-reviewer.md` に旧称「4視点」が残存、Business Logic 項目（実装正確性）と観点6（経営・事業=戦略判断）を性質の違いを無視して一律対応、章順が実行フローと不一致、Codex/Antigravity の起動手順が「ai-cli-execution を見よ」の丸投げでClaude Codeとの非対称が生じる、CLIフラグ `--tools`/`--allowedTools` の混同 | 用語是正時に変更箇所のみを直し、本文全体を通しで再点検しなかったため、遠い箇所の不整合が残った | 再掲テーブルを削除し正本参照へ一本化（Antigravity に MCP 経路が無い事実は失わせず ai-cli-execution 参照に配線し直して保持）、`codex-reviewer.md` の表記是正、Business Logic を観点3（実装正確性）＋画面遷移サブ項目のみ観点1（要件充足）へ再割当し経営判断が要る対象には `ceo-reviewer`/`cmo-advisor` 追加起動を配線、章順を実行フロー順（実行アーキテクチャ→横断ゲート→3視点起動方法→第3層チェックリスト→Round構成）へ並べ替え、Codex/Antigravity の最小実行スニペットを本文へ直接提示、`--allowedTools` へ是正 |
+| 2026-08-17 | Antigravity 視点の起動コマンドが `--print-timeout 900` を指定しており、EXIT=2・空出力で毎回失敗していた。3視点レビューが気づかれないまま2視点で運用されていた | `agy --print-timeout` は Go の duration 文字列を要求するが、誤った実測記録（「15分＝900秒指定で成功」）を根拠に単位なしの数値が6箇所へ横展開されていた | 全6箇所を `15m` へ修正し、単位付き必須である旨を各説明文に明記。Step 2 の確認手順に EXIT 値と出力ファイル非空の確認が既にあることを再確認 |
 
 ### 反映の手順
 
@@ -486,6 +490,9 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 | バージョン | 日付       | 変更内容                                                                                  |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v3.2.3     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「スコープを固定し過剰処理を防ぐ」に追随。「共通プロンプト雛形」節の注記、`agents/codex-reviewer.md`、`agents/code-checklist-13.md` の Codex 向けプロンプトへ、【モデル運用】ブロック直後に【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）を原文のまま挿入する旨を追加 |
+| v3.2.2     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「モデル役割分担ブロックを必ず入れる」に追随。「共通プロンプト雛形」節に、Codex（`codex exec`）実行時のみゴール文直後へ【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を挿入する旨の注記を追加（Claude Code / Antigravity 向けは対象外。続けて挿入する【スコープ】ブロックの追加は v3.2.3 参照） |
+| v3.2.1     | 2026-08-17 | `agy --print-timeout` の値を `900` から `15m` へ修正（単位なしの `900` は EXIT=2 でオプション不正となり Antigravity 視点が空出力で失敗していた。2026-08-17 実測で確定） |
 | v3.2.0     | 2026-08-16 | 並列修正で発生した正本間の矛盾・伝播漏れの是正（逐次修正）。「3視点の起動方法」節冒頭に外部送信リスクの注意（正本 review-matrix.md 参照）を追加。Antigravity 起動をパス渡しから内容埋め込み方式（`$(cat ...)`）へ修正し `--print-timeout 900`・`--output-format text`・出力先 `.md` を追加（従来はパスのみ渡す形で headless 実行時に読み取り不能・空出力になっていた）。共通プロンプト雛形に Antigravity 実行時は内容埋め込みが必須である旨を注記。Round 1 表頭「主担当の観点（正本の『主担当の観点』に準拠）」を「各視点の重点担当観点（コード実装向け）」へ改め、正本の対象横断定義とコード実装向け重点配分が別物である旨を明記。優先度表に正本「優先度の共通記法」（Critical/Major/Minor/Question/Positive）との対応列を追加。「レビューの姿勢」表に残存していたTier情報の断片（CLI > MCP > Task tool ペルソナ）を正本参照へ置換。Round 2 節に稼働視点数の確認ステップと正本「視点が縮退した場合の扱い」への明示参照を追加。Antigravity 起動コマンドにモデル名ハードコード注記（正本は ai-cli-execution/reference.md）を追加 |
 | v3.1.0     | 2026-08-16 | 内部整合性レビュー指摘の反映。「ここでは再掲しない」直後にTierテーブルを再掲していた自己矛盾を解消し正本参照へ一本化（`agents/codex-reviewer.md` の旧称「4視点」を「3視点（Codex自身がその1視点）」へ是正）。第3層対応表のBusiness Logic項目を観点6（経営・事業）一律対応から観点3（実装正確性）＋画面遷移サブ項目のみ観点1（要件充足）へ再割当し、真の経営判断が要る対象へ `ceo-reviewer`/`cmo-advisor` を追加起動する配線を新設。章順を実行フロー順（実行アーキテクチャ→横断ゲート→3視点の起動方法→第3層チェックリスト→Round構成）へ並べ替え。「3視点の起動方法」節に Codex/Antigravity の最小実行スニペット（Step0疎通確認・Step1レビュー実行）を追加しClaude Codeとの非対称を解消。横断ゲートに「3層構造に入る前の事前フィルタ」である旨を明記。CLIフラグの誤用を是正（`--tools`→`--allowedTools`。読み取り専用レビューは許可リストで制御するのが正しい）。レビューコメント優先度記法（[MUST]等）の定義箇所が本スキル内で単一である旨を明記（正本の共通記法策定待ち） |
 | v3.0.0     | 2026-08-16 | `.claude/docs/review-matrix.md`（正本）新設に伴う全面書き換え。旧称「13視点」を「コード実装チェックリスト（13項目）」へ是正し `agents/13-perspectives-unified.md` を `agents/code-checklist-13.md` へ改名（13項目→正本の観点9つの対応表を新設）。視点定義・観点定義・実行経路の優先順位・独立性の申告フォーマット・総合判定ルール・裁定ルールを正本参照へ置換し重複を削除。旧「モードA/モードB」の分岐と「SKILL.mdレベル4視点/エージェント定義レベル13視点」という二重階層を廃止し、Claude Code（`claude -p` 新規追加）/ Codex / Antigravity の3視点＋Tier1-3実行モデルへ統一。Round構成に「Round 2: 不一致の抽出と裁定」を新設（旧Round構成は結果統合→fact-checkの2段だった）。Antigravity をコード実装レビューでも Codex と同格の必須試行へ変更（従来はデザイン/UX含有時のみ必須）。破壊的変更: `agents/13-perspectives-unified.md` を参照していた外部プロンプト・ドキュメントは `agents/code-checklist-13.md` へ追随が必要 |

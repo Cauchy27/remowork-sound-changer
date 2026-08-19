@@ -195,6 +195,12 @@ echo "EXIT=$?"
 
 ## 5. Tier 1: Codex CLI
 
+### モデル運用（必須）
+
+Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra を個別起動）を原文のまま冒頭に含める。省略は違反。全工程を Sol 単独で実行すると週次レートリミット消費が約 **1.5%/1H**、Sol 監督 + Luna Max ワーカーだと **0.3〜0.7%/1H** で済む（実測。同一成果に対し半分以下）。ブロックの原文・前提モデル識別子・詳細な運用理由は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。
+
+【モデル運用】ブロックの直後には【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）も原文のまま必ず含める。省略は違反。ブロックの原文は同じく [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。
+
 ### Step 0: 利用可否の判定
 
 ```bash
@@ -225,6 +231,7 @@ codex exec -s read-only -o .tmp/ai-review/{名前}.md "{4要素プロンプト}"
 |------|------|
 | `-s read-only` | レビュー・調査は読み取りのみ。書き込みが必要な場合だけ `workspace-write` を明示的に選ぶ |
 | `-o {ファイル}` | **正常終了時に最終メッセージだけ**を保存する。途中経過は残らない |
+| `"{4要素プロンプト}"` | プロンプト本文。**冒頭に【モデル運用】ブロック、続けて【スコープ】ブロック（いずれも [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) 原文）を必ず含める**（省略不可。上記「モデル運用（必須）」参照） |
 | `< /dev/null` | 付けないと stdin を待って停止する |
 | `> {ログ} 2>&1` | 進捗ログを**捨てずに別ファイルへ**。メインコンテキストを汚さず、失敗理由も残る |
 | `echo "EXIT=$?"` | 成否判定。出力ファイルの存在・非空とあわせて確認する |
@@ -292,7 +299,7 @@ gpt-oss-120b-medium
 ### Step 2: 非対話実行の標準形
 
 ```bash
-agy --mode plan --model gemini-3.1-pro-high -p "{4要素プロンプト}" --output-format json --print-timeout 900 > .tmp/ai-review/{名前}.json 2> .tmp/ai-review/{名前}.log; echo "EXIT=$?"
+agy --mode plan --model gemini-3.1-pro-high -p "{4要素プロンプト}" --output-format json --print-timeout 15m > .tmp/ai-review/{名前}.json 2> .tmp/ai-review/{名前}.log; echo "EXIT=$?"
 ```
 
 | 要素 | 理由 |
@@ -301,7 +308,7 @@ agy --mode plan --model gemini-3.1-pro-high -p "{4要素プロンプト}" --outp
 | `--model` | 上表のとおり明示する。省略すると Flash になる |
 | `-p` | 非対話（headless）実行。1プロンプトを実行して終了する |
 | `--output-format` | `text` / `json` / `stream-json` の3値に対応。`text` は応答本文のみ、`json` は実測で `conversation_id` / `status` / `response` / `duration_seconds` / `num_turns` / `usage` を返す一括出力、`stream-json` は逐次イベント出力（通常のレビュー用途では `text` か `json` で足りる） |
-| `--print-timeout` | **既定は5分（300秒）。長いレビューでは不足する**（実測: 5分では打ち切られたレビューが、15分＝`900` 秒指定で成功した）。複数観点・長文対象を1回にまとめる場合は明示的に延ばす |
+| `--print-timeout` | **既定は5分（300秒）。長いレビューでは不足する**ため `15m` 等へ明示的に延ばす。値は Go の duration 文字列が必須で、単位なしの `900` は不正値で EXIT=2 になる。`15m` または `900s` と単位付きで指定すること（2026-08-17 実測。従来「15分＝`900` 秒指定で成功した」としていた記録は誤り）。複数観点・長文対象を1回にまとめる場合は明示的に延ばす |
 | `> {ファイル}` | 応答は **stdout**、診断は **stderr**。リダイレクトで結果だけを回収する |
 | `echo "EXIT=$?"` | 成功は `0`、失敗は非ゼロ（`stderr` と JSON の `error` に詳細） |
 

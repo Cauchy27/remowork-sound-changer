@@ -9,7 +9,7 @@ timestamp: 2026-08-02T00:00:00Z
 # 外部AIツール実行ポリシー（CLI 優先・3層モデル）
 
 Claude Code（`claude -p`。オーケストレーター本体からのネスト起動を含む）/ Codex / Antigravity という**3視点**を呼ぶ際の経路と担当領域を定める。**Claude Code 自身も対象に含む**（別プロセスとして起動する `claude -p` を、Codex/Antigravity と同格の視点として扱う）。
-プロンプトの書き方は [Codex プロンプト設計ガイドライン](codex-prompt-guideline.md) を参照（本ポリシーは経路と役割、あちらは中身）。
+プロンプトの書き方は [Codex プロンプト設計ガイドライン](codex-prompt-guideline.md) を参照（本ポリシーは経路と役割、あちらは中身）。Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra）を必ず含める（省略不可。ブロック原文は同ガイドライン参照）。
 
 **本ファイルが方針（対象ツールと担当領域・経路の優先順位）の正本。実行手順の正本は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md)。**
 
