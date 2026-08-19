@@ -197,7 +197,7 @@ echo "EXIT=$?"
 
 ### モデル運用（必須）
 
-Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra を個別起動）を原文のまま冒頭に含める。省略は違反。全工程を Sol 単独で実行すると週次レートリミット消費が約 **1.5%/1H**、Sol 監督 + Luna Max ワーカーだと **0.3〜0.7%/1H** で済む（実測。同一成果に対し半分以下）。ブロックの原文・前提モデル識別子・詳細な運用理由は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。
+Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra を個別起動）を原文のまま冒頭に含める。省略は違反。全工程を Sol 単独で実行すると週次レートリミット消費が約 **1.5%/1H**、Sol 監督 + Luna Max ワーカーだと **0.3〜0.7%/1H** で済む（実測。同一成果に対し半分以下）。ブロックの原文・前提モデル識別子・詳細な運用理由は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。 なお **Luna の reasoning effort は必ず `max` を明示する**（`gpt-5.6-luna` の既定は `medium` のため、無指定では max にならない）。
 
 【モデル運用】ブロックの直後には【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）も原文のまま必ず含める。省略は違反。ブロックの原文は同じく [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。
 
