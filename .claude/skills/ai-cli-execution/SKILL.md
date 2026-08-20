@@ -15,11 +15,7 @@ updated: 2026-08-19
 
 ## 使用宣言（必須）
 
-このスキルを使用する際は、必ず最初に以下を出力すること：
-
-```
-[ai-cli-execution スキルを使用します]
-```
+作業開始時に `[ai-cli-execution スキルを使用します]` と宣言する。
 
 ## 概要
 
@@ -65,9 +61,6 @@ Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示�
 | スキル | 用途 |
 |--------|------|
 | [code-review](../code-review/SKILL.md) | Codex 併用の2系統並列レビュー |
-| [internal-structure-review](../internal-structure-review/SKILL.md) | 3視点（Claude Code / Codex / Antigravity）の実CLI起動手順 |
-| [agent-review](../agent-review/SKILL.md) | エージェント定義の Codex 独立レビュー |
-| [development-orchestration](../development-orchestration/SKILL.md) | 標準開発フローからの利用 |
 
 ---
 

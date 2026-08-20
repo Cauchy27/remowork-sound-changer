@@ -26,14 +26,9 @@ Service Worker、Content Script、Popup間の問題切り分けをカバー。
 
 ---
 
-## 使用宣言
+## 使用宣言（必須）
 
-**このスキルを使用する場合、作業開始時に以下を宣言すること:**
-
-```
-このタスクでは debugging スキルを使用します。
-参照: .claude/skills/debugging/SKILL.md
-```
+作業開始時に `[debugging スキルを使用します]` と宣言する。
 
 ---
 

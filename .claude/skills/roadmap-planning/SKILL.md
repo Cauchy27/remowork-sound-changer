@@ -34,14 +34,9 @@ updated: 2026-08-02
 
 ---
 
-## 使用宣言
+## 使用宣言（必須）
 
-**このスキルを使用する場合、作業開始時に以下を宣言すること:**
-
-```
-[roadmap-planning スキルを使用します]
-参照: .claude/skills/roadmap-planning/SKILL.md
-```
+作業開始時に `[roadmap-planning スキルを使用します]` と宣言する。
 
 ---
 

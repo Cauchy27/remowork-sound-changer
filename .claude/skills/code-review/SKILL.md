@@ -9,8 +9,8 @@ description: |
   全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
-version: 3.2.3
-updated: 2026-08-19
+version: 3.2.4
+updated: 2026-08-20
 ---
 
 # 統合コードレビュースキル
@@ -39,24 +39,13 @@ updated: 2026-08-19
 
 **旧称「13視点」は誤用だった。** 13項目は「観点をどう見るか」の第3層チェックリストであり、正本でいう「視点（誰が見るか）」ではない。本スキルでは以後「コード実装チェックリスト（13項目）」または「13項目チェックリスト」と呼ぶ。この用語衝突が `internal-structure-review`（3視点）との統合を妨げていたため是正した。ファイルも `agents/13-perspectives-unified.md` から `agents/code-checklist-13.md` へ改名している。
 
-## 📖 技術情報の参照
+## 技術情報の参照
 
-**技術的な情報（ライブラリのAPI、フレームワークの仕様、ベストプラクティス等）を調べる際は、必ず Context7 MCP を使用すること。**
+ライブラリ・フレームワークの仕様は記憶に頼らず Context7 MCP で最新を取得する。手順と使う場面: [technical-reference-lookup.md](../../docs/technical-reference-lookup.md)
 
-```
-手順:
-1. resolve-library-id でライブラリIDを解決
-2. query-docs でドキュメントを取得
-```
+## コンテキスト節約
 
-## 🗜️ コンテキスト節約
-
-**作業中のコンテキスト肥大化を防ぐため、以下を遵守すること。**
-
-- **サブエージェントを積極活用**: 調査・実装・テストはサブエージェントに委託し、メインコンテキストを圧迫しない
-- **結果はファイルに書き出す**: `.tmp/{task_name}/` に出力し、メインへの返答は 3-5 行の要約のみ
-- **大きなファイルは部分読み**: offset/limit を活用し、全文読み込みを避ける
-- **リファレンスは遅延読み込み**: 必要なステップでのみ読み込み、最初に全て読まない
+サブエージェントへの委託、結果のファイル書き出し、部分読み、遅延読み込みでコンテキスト肥大を防ぐ。詳細: [context-management.md](../../docs/context-management.md)
 
 ---
 
@@ -119,125 +108,9 @@ Claude Code視点        Codex視点            Antigravity視点
 
 視点ごとに Tier 判定は独立に行う。**1視点が Tier 3 に落ちても、他の視点まで道連れにしない。**
 
-**重い一括レビューを CLI/MCP へ1発で投げると、成果物ゼロのままタイムアウトする。** 必ず観点単位・ファイル単位に分割すること。エラー対処・既知の失敗パターン（MCP のタイムアウト対策として分割必須／`codex exec review` サブコマンドと観点プロンプトの併用不可／`-o` 前に出力先ディレクトリ作成必須／Antigravity のモデル指定必須／headless の権限モデル注意）の詳細は [`ai-cli-execution` スキル](../ai-cli-execution/SKILL.md)（[reference.md](../ai-cli-execution/reference.md) §5・§6 が正本）に従う。**本スキルでは再掲しない。**
+**重い一括レビューを CLI/MCP へ1発で投げると、成果物ゼロのままタイムアウトする。** 必ず観点単位・ファイル単位に分割すること。エラー対処・既知の失敗パターンの詳細は [`ai-cli-execution` スキル](../ai-cli-execution/SKILL.md)（[reference.md](../ai-cli-execution/reference.md) §5・§6 が正本）に従う。**本スキルでは再掲しない。**
 
-### 共通プロンプト雛形（4要素・3視点共通）
-
-```
-ゴールは {対象} を観点 {観点番号・名称} でレビューし、優先度付きの指摘を返すこと。
-
-【対象ファイル】{ファイルパスを明示列挙}
-【観点】{1〜数観点。正本の観点番号で指定}
-【チェックリスト】.claude/skills/code-review/agents/code-checklist-13.md の該当項目を用いる
-【制約】根拠となる行番号を添える。ファイルを実際に読んでから判定する（憶測禁止）
-【完了条件】各指摘に 優先度・行番号・内容 が揃っている
-【出力形式】テーブル
-```
-
-**Antigravity（`agy`）実行時のみ、【対象ファイル】をパスのまま渡さず、内容を `cat` で取得してプロンプトへ直接埋め込むこと。** headless 実行はファイル読み取りが auto-deny されうるため、パスだけでは空出力になる（詳細は後述「Antigravity 視点」節）。
-
-**Codex（`codex exec`）実行時のみ、ゴール文の直後に【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を原文のまま挿入すること。** 詳細・原文は [`.claude/docs/codex-prompt-guideline.md`](../../docs/codex-prompt-guideline.md) を参照（Claude Code / Antigravity 向けには不要）。
-**同じく Codex 実行時のみ、続けて【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）も原文のまま挿入すること。** 原文は同ガイドラインを参照。
-
-3視点とも、下記の Step 0（疎通確認）→ Step 1（レビュー実行、上記プロンプト雛形を埋めて使用）の順で直接実行できる。
-
-### Claude Code 視点（`claude -p`）
-
-**トップレベルセッション自身がレビューを書くのは自己レビューになる。** 正本の実測例（review-matrix.md の「視点を実CLIで実行する理由」）が示すとおり、同一文脈のペルソナは前提ごと見落とす。**別プロセスの `claude -p` を独立して起動すること。**
-
-#### Step 0: 疎通確認
-
-```bash
-mkdir -p .tmp/ai-review
-claude -p --allowedTools "" "Reply with exactly: PONG" > .tmp/ai-review/claude-probe.log 2>&1; echo "EXIT=$?"
-```
-
-`EXIT=0` かつ出力に `PONG` があれば疎通OK。**認証エラー（`Failed to authenticate` 等）が出た場合、ネストした CLI 実行では親セッションと別の OAuth セッションを要求されることがある。** その場合はユーザーに `claude auth` 状態の確認を案内したうえで Tier 3 へフォールバックする。
-
-#### Step 1: レビュー実行
-
-```bash
-claude -p --allowedTools "Read,Grep,Glob" --output-format text "{上記の4要素プロンプトを埋めたもの}" > .tmp/ai-review/claude-review.md 2> .tmp/ai-review/claude-review.log
-echo "EXIT=$?"
-```
-
-| 要素 | 理由 |
-|------|------|
-| `--allowedTools "Read,Grep,Glob"` | レビューは読み取りのみ。**`--tools`（利用可能ツールの選択）と `--allowedTools`（許可リスト）は両方実在するが意味が異なる。** 読み取り専用レビューは Edit/Write/Bash を許可リストに含めない `--allowedTools` が正しい |
-| 標準出力/標準エラーを分離 | 途中経過（stderr）と最終結果（stdout）を混ぜない |
-| 結果を読む前に | **EXIT・ファイル存在・非空** の3点を確認する（Codex/Antigravity と同じ作法） |
-
-### Codex 視点（`codex exec`）
-
-#### Step 0: 疎通確認
-
-```bash
-codex exec -s read-only -o .tmp/ai-review/codex-probe.md "ゴールは PONG とだけ返すこと。" < /dev/null > .tmp/ai-review/codex-probe.log 2>&1; echo "EXIT=$?"
-```
-
-#### Step 1: レビュー実行
-
-```bash
-codex exec -s read-only -o .tmp/ai-review/codex-review.md "{上記の4要素プロンプトを埋めたもの}" < /dev/null > .tmp/ai-review/codex-review.log 2>&1; echo "EXIT=$?"
-```
-
-`-s read-only` を必ず付ける（読み取り専用）。`< /dev/null` を付けないと stdin 待ちで停止する。`-o` は出力先ディレクトリを先に作らないと書き込みに失敗する。CLI 未設定時のセットアップ案内・MCP フォールバック（Tier 2、タスク分割必須）・ネイティブ差分レビュー（`codex exec review`）は [ai-cli-execution](../ai-cli-execution/SKILL.md) を参照。
-
-### Antigravity 視点（`agy`）
-
-**下記コマンド中のモデル名（`gemini-3.1-pro-high`）は例示。** モデル名は変わりうるため、最新の推奨モデルは [`ai-cli-execution` スキルの reference.md](../ai-cli-execution/reference.md) §6 Step 1 を正本とする。モデル改廃時はそちらのみ更新すればよく、本ファイルの追随は不要。
-
-#### Step 0: 疎通確認
-
-```bash
-agy -p "ゴールは PONG とだけ返すこと。" --output-format text > .tmp/ai-review/agy-probe.md 2> .tmp/ai-review/agy-probe.log; echo "EXIT=$?"
-```
-
-#### Step 1: レビュー実行（対象ファイルの内容を埋め込む。パスだけを渡すと読めず空出力になる）
-
-**headless（`-p`）実行はファイル読み取り等のツール呼び出しが auto-deny されうる。** `agy` に対象ファイルを読ませようとせず、呼び出し側（シェル）が `cat` で内容を先に取得し、プロンプト文字列へ直接埋め込む（`internal-structure-review` スキルの Antigravity 起動と同じ方式。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6「headless の権限モデル」）。
-
-```bash
-AGY_TARGET=$(cat {対象ファイルを列挙。複数ファイルは cat file1 file2 ... で連結})
-agy --mode plan --model gemini-3.1-pro-high -p \
-  "{上記の4要素プロンプトを埋めたもの}
-
-## 対象ファイルの内容（ツール呼び出しは行わず、ここに埋め込まれた内容だけで判定すること）
-${AGY_TARGET}
-" \
-  --output-format text --print-timeout 15m > .tmp/ai-review/agy-review.md 2> .tmp/ai-review/agy-review.log; echo "EXIT=$?"
-```
-
-`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--model gemini-3.1-pro-high` を省略すると既定の Flash になり独立視点が薄まる。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` は手順・対象内容を埋め込んだ分プロンプトが長くなるため指定する（既定5分では打ち切られることがある）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
-
-本スキル固有の点のみ以下に記す（手順詳細は上記コードブロックと ai-cli-execution 参照）。
-
-- 出力先は本スキル共通で `.tmp/ai-review/` 配下に統一する
-- プロンプトの【チェックリスト】欄には `agents/code-checklist-13.md` を指定する（同ファイル末尾の「Codex プロンプトテンプレート」に Go/Next 別のひな形がある）
-- **Antigravity はコード実装レビューでも Codex と同格の必須試行**（正本の「対象別の視点・観点セット」で、コード実装は3視点とも使う対象に指定されているため）。デザイン/UI/UX を含まないバックエンドのみの変更でも試行し、利用不可の場合のみ独立性低下を明記して Tier 3 へ落とす
-
-### Tier 3: Task tool + ペルソナ（最終手段）
-
-CLI・MCP のどちらも疎通しない視点だけを、以下で代替する。
-
-```markdown
-Task(subagent_type="codex", description="Codex視点レビュー（代替）", prompt="
-  .claude/skills/code-review/agents/codex-reviewer.md の手順と
-  .claude/skills/code-review/agents/code-checklist-13.md のチェックリストに従い、
-  {対象ファイル} を批判的にレビューすること。
-")
-
-Task(subagent_type="antigravity", description="Antigravity視点レビュー（代替）", prompt="
-  .claude/agents/llm-personas/antigravity.md のペルソナ定義に従い、
-  {対象ファイル} をアーキテクチャ・UX・情報設計の観点で批判的にレビューすること。
-")
-```
-
-**代替が必要な視点は同一メッセージ内で同時起動する**（逐次実行禁止）。Claude Code 視点が Tier 3 に落ちた場合は、トップレベルセッション自身が `agents/code-checklist-13.md` に従ってレビューする（別プロセスを起動できず独立性はさらに下がるため、その旨を必ず明記する）。
-
-`agents/codex-reviewer.md` と `agents/code-checklist-13.md` は**手順書・チェックリストの素材**であり、`subagent_type` として起動できるエージェント定義ではない。記述規約: [agent-invocation-patterns.md](../../docs/agent-invocation-patterns.md)
-
-独立性が下がった視点は、正本の「独立性の申告」フォーマットに従い結果冒頭に明記する（本スキルでの再掲はしない）。
+共通プロンプト雛形（4要素）・Claude Code/Codex/Antigravity 各視点の Step 0（疎通確認）/Step 1（レビュー実行）の実行コマンド全文・Tier 3（Task tool + ペルソナ）フォールバックのコード例は [reference.md](./reference.md) セクション1を参照。
 
 ---
 
@@ -245,40 +118,7 @@ Task(subagent_type="antigravity", description="Antigravity視点レビュー（�
 
 このスキル固有のチェックリストは [`agents/code-checklist-13.md`](./agents/code-checklist-13.md) にある（Go / Next.js 両対応）。各視点はレビュー時にこのチェックリストの該当項目を参照する。
 
-### 13項目 → 正本の観点9つ 対応表
-
-| # | チェックリスト項目 | 対応する観点（正本） |
-|---|-------------------|---------------------|
-| 1 | Readability（可読性） | 3 実装品質・エッジケース |
-| 2 | Naming（命名規則） | 3 実装品質・エッジケース |
-| 3 | Code Structure（コード構造） | 2 アーキテクチャ・構造 |
-| 4 | Input Validation（入力検証） | 4 セキュリティ |
-| 5 | Auth（認証・認可） | 4 セキュリティ |
-| 6 | Query Efficiency（クエリ効率） | 3 実装品質・エッジケース |
-| 7 | Memory（メモリ・並行） | 3 実装品質・エッジケース |
-| 8 | Test Coverage（テストカバレッジ） | 3 実装品質・エッジケース |
-| 9 | Test Quality（テスト品質） | 3 実装品質・エッジケース |
-| 10 | API Design（API設計） | 2 アーキテクチャ・構造 |
-| 11 | Dependency（依存関係） | 2 アーキテクチャ・構造 |
-| 12 | Error Handling（エラーハンドリング） | 3 実装品質・エッジケース（ユーザー列挙防止に関わる箇所は 4 セキュリティも兼ねる） |
-| 13 | Business Logic（ビジネスロジック） | 3 実装品質・エッジケース（金額・税・状態遷移など、**決定済みの業務ルールを正しく実装したか**を問う実装正確性チェック）。フロントエンド重点チェック #7「画面遷移・導線の仕様適合」のみ 1 要件充足（仕様との整合を問う項目のため） |
-
-**観点6（経営・事業）と項目13を安易に一致させない。** 項目13は「決定済みの業務ルールを正しく実装したか」という実装正確性チェックであり、観点6（作る価値がない/コストが回収できない/収益導線が無い、という戦略判断）とは性質が異なる。両者を一律対応させると、Claude Code の主担当が実質は項目13を消化するだけで、経営判断そのものは行われず空回りする。
-
-真に経営・事業判断が必要な対象（課金導線の新設・料金体系変更・収益に関わる仕様変更）では、Claude Code が `ceo-reviewer` / `cmo-advisor` を Task で追加起動し、観点6を深く見る（正本の「観点6をさらに深く見る対象では専門エージェントを追加する」規定に対する具体的な配線）。
-
-```markdown
-Task(subagent_type="ceo-reviewer", description="経営視点レビュー（観点6追加起動）", prompt="
-  {対象} は課金導線/料金体系/収益導線に関わる変更である。
-  作る価値があるか・コストが回収できるか・収益導線が成立しているかを、経営者視点で批判的にレビューすること。
-")
-
-Task(subagent_type="cmo-advisor", description="マーケティング視点レビュー（観点6追加起動）", prompt="
-  {対象} の収益導線・料金訴求が競合と比べ妥当か、独自ポジショニングを損ねていないかをレビューすること。
-")
-```
-
-観点 7（運用・保守）は特定の項目に固定せず、13項目全体を横断して見る（テストの陳腐化、依存の更新容易性、エラーハンドリングの追跡容易性など）。観点 1（要件充足）・2（アーキテクチャ）・7（運用保守）は正本の**合議観点**であり、下記 Round 1 で複数視点が重複して見る。
+13項目→正本の観点9つの対応表、Business Logic 項目（観点6と安易に一致させない理由）、経営・事業判断が必要な対象での `ceo-reviewer`/`cmo-advisor` 追加起動テンプレートは [reference.md](./reference.md) セクション2を参照。
 
 ---
 
@@ -324,7 +164,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 ### Round 4: ファクトチェック（必須）
 
-結果統合（Round 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず [code-review-fact-check スキル](../code-review-fact-check/SKILL.md) を Round 4 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。GYARU-* を含む全指摘が検証対象。
+結果統合（Round 3）が完了したら、統合レビュー結果をそのまま最終成果物にせず、必ず `code-review-fact-check スキル` を Round 4 として実行し、実コード照合で「妥当/部分的に妥当/過剰/事実誤認」を判定すること。GYARU-* を含む全指摘が検証対象。
 
 ファクトチェックで「妥当」と判定された指摘のみを最終 PR コメント・レビュー結果に採用する。詳細な実行手順（4 Phase・4択判定区分・出力テンプレート）は `code-review-fact-check/SKILL.md` を参照。
 
@@ -332,64 +172,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 ## 統合レビュー結果テンプレート
 
-総合判定の基準（PASS/WARN/NG、裁定が決着しない場合は保留）は正本を参照。ここでは再掲しない。
-
-```markdown
-# 統合レビュー結果
-
-**対象**: {機能名/ファイル名}
-**使用視点**: Claude Code (claude -p) / Codex (codex exec) / Antigravity (agy)
-**実行経路**: {全視点 Tier 1 / 一部 Tier 3 など}
-**使用観点**: 1 要件充足 / 2 アーキテクチャ / 3 実装品質 / 4 セキュリティ / 7 運用保守（該当時 6・9 も記載）
-
-## レビュー概要
-
-| 視点         | 評価           | 指摘数 |
-| ------------ | -------------- | ------ |
-| Claude Code  | PASS/WARN/NG   | X件    |
-| Codex        | PASS/WARN/NG   | X件    |
-| Antigravity  | PASS/WARN/NG   | X件    |
-
----
-
-## 修正必要項目（優先度順）
-
-### [MUST] 修正必須
-
-| #   | ファイル | 行番号 | 視点 | 観点 | 内容 |
-| --- | -------- | ------ | ---- | ---- | ---- |
-
-### [SHOULD] 推奨修正
-
-| #   | ファイル | 行番号 | 視点 | 観点 | 内容 |
-| --- | -------- | ------ | ---- | ---- | ---- |
-
-### [NIT] 検討事項
-
-| #   | ファイル | 行番号 | 視点 | 観点 | 内容 |
-| --- | -------- | ------ | ---- | ---- | ---- |
-
-### 判定が割れた項目（Round 2 裁定結果）
-
-| #   | 項目 | 各視点の判定 | 割れの型 | 一次情報 | 裁定 |
-| --- | ---- | ------------ | -------- | -------- | ---- |
-
-### 本質ギャルレビュー（横断ゲート・別枠、3視点/13項目のカウント外）
-
-| #   | 指摘ID | 優先度 | 内容 |
-| --- | ------ | ------ | ---- |
-
----
-
-## 良い点
-
-1. ...
-2. ...
-
----
-
-## 総合評価: PASS / WARN / NG / 保留
-```
+総合判定の基準（PASS/WARN/NG、裁定が決着しない場合は保留）は正本を参照。テンプレート全文は [reference.md](./reference.md) セクション3を参照。
 
 ---
 
@@ -451,22 +234,14 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 - CLI 実行手順の正本: [ai-cli-execution](../ai-cli-execution/SKILL.md)
 - バックエンドレビュー: プロジェクト固有のレビュースキル（セットアップ時にパス設定）
 - フロントエンドレビュー: プロジェクト固有のレビュースキル（セットアップ時にパス設定）
-- [PRコメント生成](./../pr-comment/SKILL.md)
+- `PRコメント生成`
 
 ---
 
 ## 失敗の記録と反映
 
-このスキルの実行で失敗・見落とし・誤りが起きたら、**その場で下表に追記する**。
-表に行を足すだけで本文を直さないのは記録ではなく放置。必ず本文へ反映する。
-規約: [skill-self-improvement.md](../../docs/skill-self-improvement.md)
-
-### 記録する条件
-
-- 出力に誤りがあり、ユーザーから訂正された
-- 手順どおり実行したのに目的を達成できなかった
-- 検証をすり抜けた欠陥が後から見つかった
-- サブエージェントの結果を鵜呑みにして誤りを通した
+失敗・見落とし・誤りが起きたら下表に追記し、**本文の該当箇所も直す**。表に行を足すだけで本文を直さないのは記録ではなく放置。
+記録する条件・反映の手順・書くもの/書かないもの: [skill-self-improvement.md](../../docs/skill-self-improvement.md)
 
 ### 既知の失敗パターン
 
@@ -477,19 +252,13 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 | 2026-08-16 | 用語是正（v3.0.0）直後の全数点検漏れ: 「ここでは再掲しない」と明言した2行後にTierテーブルを再掲する自己矛盾、`agents/codex-reviewer.md` に旧称「4視点」が残存、Business Logic 項目（実装正確性）と観点6（経営・事業=戦略判断）を性質の違いを無視して一律対応、章順が実行フローと不一致、Codex/Antigravity の起動手順が「ai-cli-execution を見よ」の丸投げでClaude Codeとの非対称が生じる、CLIフラグ `--tools`/`--allowedTools` の混同 | 用語是正時に変更箇所のみを直し、本文全体を通しで再点検しなかったため、遠い箇所の不整合が残った | 再掲テーブルを削除し正本参照へ一本化（Antigravity に MCP 経路が無い事実は失わせず ai-cli-execution 参照に配線し直して保持）、`codex-reviewer.md` の表記是正、Business Logic を観点3（実装正確性）＋画面遷移サブ項目のみ観点1（要件充足）へ再割当し経営判断が要る対象には `ceo-reviewer`/`cmo-advisor` 追加起動を配線、章順を実行フロー順（実行アーキテクチャ→横断ゲート→3視点起動方法→第3層チェックリスト→Round構成）へ並べ替え、Codex/Antigravity の最小実行スニペットを本文へ直接提示、`--allowedTools` へ是正 |
 | 2026-08-17 | Antigravity 視点の起動コマンドが `--print-timeout 900` を指定しており、EXIT=2・空出力で毎回失敗していた。3視点レビューが気づかれないまま2視点で運用されていた | `agy --print-timeout` は Go の duration 文字列を要求するが、誤った実測記録（「15分＝900秒指定で成功」）を根拠に単位なしの数値が6箇所へ横展開されていた | 全6箇所を `15m` へ修正し、単位付き必須である旨を各説明文に明記。Step 2 の確認手順に EXIT 値と出力ファイル非空の確認が既にあることを再確認 |
 
-### 反映の手順
-
-1. 上表に1行追加する
-2. **本文の該当箇所を直す**（チェックリスト項目の追加、手順の明確化など）
-3. 機械的に検出できる失敗なら `scripts/` の検証へ追加し、回帰テストを書く
-4. Version History にバージョンを上げて記録する
-
 ---
 
 ## Version History
 
 | バージョン | 日付       | 変更内容                                                                                  |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v3.2.4     | 2026-08-20 | SKILL.md 肥大化解消のため `reference.md` を新設し、3視点起動コマンド全文（共通プロンプト雛形・Claude Code/Codex/Antigravity の Step0/Step1・Tier3フォールバック）、第3層13項目→観点9対応表とBusiness Logic特記・ceo-reviewer/cmo-advisor起動テンプレート、統合レビュー結果テンプレート全文を移設。本文には各節の要約とリンクのみ残した |
 | v3.2.3     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「スコープを固定し過剰処理を防ぐ」に追随。「共通プロンプト雛形」節の注記、`agents/codex-reviewer.md`、`agents/code-checklist-13.md` の Codex 向けプロンプトへ、【モデル運用】ブロック直後に【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）を原文のまま挿入する旨を追加 |
 | v3.2.2     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「モデル役割分担ブロックを必ず入れる」に追随。「共通プロンプト雛形」節に、Codex（`codex exec`）実行時のみゴール文直後へ【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を挿入する旨の注記を追加（Claude Code / Antigravity 向けは対象外。続けて挿入する【スコープ】ブロックの追加は v3.2.3 参照） |
 | v3.2.1     | 2026-08-17 | `agy --print-timeout` の値を `900` から `15m` へ修正（単位なしの `900` は EXIT=2 でオプション不正となり Antigravity 視点が空出力で失敗していた。2026-08-17 実測で確定） |
