@@ -9,8 +9,8 @@ description: |
   全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: agent-teams
-version: 3.2.4
-updated: 2026-08-20
+version: 3.3.0
+updated: 2026-08-21
 ---
 
 # Code Review

@@ -7,8 +7,8 @@ description: |
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Grep, Glob, Bash, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: standalone
-version: 1.1.4
-updated: 2026-08-19
+version: 1.1.5
+updated: 2026-08-21
 ---
 
 # AIツール実行スキル（実CLI3視点・CLI 優先・3層モデル）
@@ -56,6 +56,8 @@ Tier 3: Claude Code の別視点で代替、または Claude Code 自身が親�
 Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示し、その直後に【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra）、続けて【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）を原文のまま必ず含める。**Luna の reasoning effort は必ず `max` を明示する**（`gpt-5.6-luna` の既定は `medium` のため、無指定では max にならない）。
 （設計ルール・ブロック原文: [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)）。
 
+**Codex に実装・修正をさせる場合は、続けて【レビュー粒度】ブロック（ループは「1ページ / 1機能」単位・実装単位が動作したら1回だけ・修正は P0/P1 のみ・再確認は差分限定）も原文のまま必ず含める。** 省略すると Codex はファイル追加のたびにレビューを回し、実装が進まないまま利用枠だけ消費する。ブロック原文は同じく [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)。レビュー専用依頼（Codex がレビュアーとして1回動くだけ）には含めない。
+
 ## 関連スキル
 
 | スキル | 用途 |
@@ -68,6 +70,7 @@ Codex へのプロンプトは冒頭で「ゴールは〜」と成果を明示�
 
 | バージョン | 日付 | 変更内容 |
 |-----------|------|----------|
+| v1.1.5 | 2026-08-21 | Codex へ実装・修正を依頼する際に【レビュー粒度】ブロック（ループは「1ページ / 1機能」単位）を必ず含める旨を追記（配布元: _claude-skills-template v1.1.5） |
 | v1.1.4 | 2026-08-19 | Codex へのプロンプトに【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）を必ず含める絶対ルールを codex-prompt-guideline.md に新設したのに伴い、本ファイル・reference.md §5 へ言及を追記 |
 | v1.1.3 | 2026-08-19 | Codex へのプロンプトに【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を必ず含める絶対ルールを codex-prompt-guideline.md に新設したのに伴い、本ファイル・reference.md §5・ai-cli-execution-policy.md へ言及と正本リンクを追記 |
 | v1.1.2 | 2026-08-17 | `agy --print-timeout` の値を `900` から `15m` へ修正（単位なしの `900` は EXIT=2 でオプション不正となり Antigravity 視点が空出力で失敗していた。2026-08-17 実測で確定） |

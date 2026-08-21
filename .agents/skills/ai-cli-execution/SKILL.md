@@ -7,8 +7,8 @@ description: |
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: standalone
-version: 1.1.4
-updated: 2026-08-20
+version: 1.1.5
+updated: 2026-08-21
 ---
 
 # Ai Cli Execution
