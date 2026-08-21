@@ -7,7 +7,7 @@ description: |
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: subagent
 version: 1.0.1
-updated: 2026-08-17
+updated: 2026-08-21
 ---
 
 # Spec Planning
