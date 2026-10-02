@@ -64,7 +64,8 @@ command -v claude && claude --version
 【判定方法】
 
 ```bash
-claude -p --model sonnet --permission-mode plan --allowedTools "" --output-format text \
+: "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "" --output-format text \
   "ゴールは PONG とだけ返すこと。" < /dev/null > /tmp/claude-auth-probe.md 2> /tmp/claude-auth-probe.log
 echo "EXIT=$?"
 ```
@@ -161,8 +162,11 @@ command -v claude && claude --version
 
 ### Step 2: 非対話実行の標準形
 
+要求モデルはユーザー指定とレビューの要件から決め、利用可能な識別子を確認して `CLAUDE_REVIEW_MODEL` に設定する。独立 CLI の指定省略を「親継承」と扱わない。成果物には要求モデル・実行モデル・確認根拠・起動経路を [独立性の申告](../../docs/review-matrix.md) に従って記録する。実行モデルの証拠が取れない場合は「未確認」とし、CLI のバージョンやモデル自身の自己申告で代用しない。
+
 ```bash
-claude -p --model sonnet --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text \
+: "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text \
   "{4要素プロンプト}" \
   < /dev/null > .tmp/ai-review/{名前}.md 2> .tmp/ai-review/{名前}.log
 echo "EXIT=$?"
@@ -170,17 +174,20 @@ echo "EXIT=$?"
 
 | 要素 | 理由 |
 |------|------|
-| `--permission-mode plan` | 書き込み不可のレビュー専用モード |
+| `--permission-mode plan` | 通常設定で書き込みを制限するレビュー用の開始モード。bypassへ切替可能なセッション等を含む全条件での書込不可を保証しない |
 | `--allowedTools "Read,Grep,Glob"` | 読み取り系ツールのみ確認なしで許可する（Step 1 参照） |
-| `--model` | 明示しないとその時点の既定モデルになる。**モデル名は変わりうるため、具体的な推奨値はここでは固定しない**（[SKILL.md](SKILL.md) の呼び出し例は例示であり、最新の推奨は本節を参照する運用にする） |
+| `--model` | 要求モデルを明示する。モデル名を固定せず、実行モデルは別途確認・記録する |
 | `< /dev/null` | 付けないと stdin を待って停止する |
 | `> {ファイル} 2> {ログ}` | 応答とエラーログを分離して回収する |
 | `echo "EXIT=$?"` | 成否判定。出力ファイルの存在・非空とあわせて確認する |
 
+ツール集合も絞る場合は `--tools "Read,Grep,Glob"` を併用する。これはビルトインの制限であり、MCPまで除く必要がある依頼では `--disallowedTools "mcp__*"` も明示する。既存deny・診断用途の許可は維持し、bypassを追加しない。[CLI公式仕様](https://code.claude.com/docs/en/cli-reference)
+
 ### Step 3: 疎通確認
 
 ```bash
-claude -p --model sonnet --permission-mode plan --allowedTools "" --output-format text \
+: "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "" --output-format text \
   "ゴールは PONG とだけ返すこと。" < /dev/null > .tmp/ai-review/claude-probe.md 2> .tmp/ai-review/claude-probe.log
 echo "EXIT=$?"
 ```
@@ -197,11 +204,9 @@ echo "EXIT=$?"
 
 ### モデル運用（必須）
 
-Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra を個別起動）を原文のまま冒頭に含める。省略は違反。全工程を Sol 単独で実行すると週次レートリミット消費が約 **1.5%/1H**、Sol 監督 + Luna Max ワーカーだと **0.3〜0.7%/1H** で済む（実測。同一成果に対し半分以下）。ブロックの原文・前提モデル識別子・詳細な運用理由は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。 なお **Luna の reasoning effort は必ず `max` を明示する**（`gpt-5.6-luna` の既定は `medium` のため、無指定では max にならない）。
+各依頼は冒頭ゴールの直後へ [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) の【モデル運用】【スコープ】を全文展開し、送信本文で確認する。原文・理由・適用層・非Bash経路の手順は同ガイドラインを正本とする。下記Step 2は抽出・引用heredoc・grep・stdin送信を一体で行う。
 
-【モデル運用】ブロックの直後には【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）も原文のまま必ず含める。省略は違反。ブロックの原文は同じく [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) を正本とする。
-
-**Codex に実装・修正をさせる依頼では、さらに【レビュー粒度】ブロックを原文のまま必ず含める。省略は違反。** 内容は「ループは 1ページ / 1機能 単位でのみ回す」「実装単位が動作した時点で1回だけレビュー」「修正は P0/P1 のみ・P2 は記録のみ」「再確認は修正差分に限定」「1単位完成ごとにコミット」。ブロック原文は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)。
+**Codex に実装・修正をさせる依頼では、さらに【レビュー粒度】ブロックを原文のまま必ず含める。省略は違反。** 内容は「ループは 1ページ / 1機能 単位でのみ回す」「実装単位が動作した時点で1回だけレビュー」「修正は P0/P1 のみ・P2 は記録のみ」「再確認は修正差分に限定」「コミットは元ユーザーの明示依頼時のみ、その範囲内で行う（定型ブロック自体は承認ではない）。依頼がなければ検証済み・未コミットで各単位を完了する」。ブロック原文は [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md)、粒度定義の正本は impl-review-loop。レビュー専用依頼（Codex を1回のレビュアーとして使う場合）には含めない。
 なお **MCP 経路のタイムアウト対策でリクエストを分割しても、レビューを回す頻度は実装単位ごとに1回**。分割した各リクエストごとにレビューを回さない（分割するのは依頼の量、粒度が決めるのはループの頻度で、両者は別軸）。
 
 ### Step 0: 利用可否の判定
@@ -218,24 +223,52 @@ command -v codex && codex --version
 
 ### Step 1: 疎通確認
 
-```bash
-codex exec -s read-only -o .tmp/ai-review/probe.md "ゴールは PONG とだけ返すこと。" < /dev/null > .tmp/ai-review/probe.log 2>&1; echo "EXIT=$?"
-```
+Step 2の組立・grep・送信手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log` に替えて1回実行する。疎通確認でも正本ブロックを省略しない。
 
 `EXIT=0` かつ出力ファイルに `PONG` → 疎通OK。失敗時は `probe.log` に理由が残る。
 
 ### Step 2: 観点付きレビュー（標準形）
 
+出力先ディレクトリを先に用意する。ゴール・タスク本文・出力先を依頼に合わせて埋める。
+
 ```bash
-codex exec -s read-only -o .tmp/ai-review/{名前}.md "{4要素プロンプト}" < /dev/null > .tmp/ai-review/{名前}.log 2>&1; echo "EXIT=$?"
+codex_guard_blocks=$(awk '
+$0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
+$0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
+$0 == "<!-- codex-prompt-scope:start -->" { if (step != 2) exit 1; step=3; next }
+$0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
+step == 1 || step == 3 { print }
+END { if (step != 4) exit 1 }
+' .claude/docs/codex-prompt-guideline.md) || exit 1
+codex_prompt_file=".tmp/ai-review/{名前}-prompt.txt"
+{
+  cat <<'CODEX_GOAL'
+ゴールは {対象ファイル} を {観点} でレビューし、根拠付きの指摘を0〜5件返すこと。
+CODEX_GOAL
+  printf '\n%s\n\n' "$codex_guard_blocks"
+  cat <<'CODEX_TASK'
+【対象ファイル】{対象ファイル}
+【観点】{観点}
+【制約】根拠を優先し、件数を埋めない。ファイルを実際に読み、根拠となる行番号を添える（憶測禁止）。修正は行わない
+【完了条件】各指摘に優先度・行番号・内容を揃える。0件なら「指摘なし」と判断根拠を返す
+【出力形式】テーブル
+CODEX_TASK
+} > "$codex_prompt_file" || exit 1
+[ "$(grep -cFx '【モデル運用】' "$codex_prompt_file")" -eq 1 ] &&
+[ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
+! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
+grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
+codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
+  -o ".tmp/ai-review/{名前}.md" - < "$codex_prompt_file" > ".tmp/ai-review/{名前}.log" 2>&1
+echo "EXIT=$?"
 ```
 
 | 要素 | 理由 |
 |------|------|
 | `-s read-only` | レビュー・調査は読み取りのみ。書き込みが必要な場合だけ `workspace-write` を明示的に選ぶ |
 | `-o {ファイル}` | **正常終了時に最終メッセージだけ**を保存する。途中経過は残らない |
-| `"{4要素プロンプト}"` | プロンプト本文。**冒頭に【モデル運用】ブロック、続けて【スコープ】ブロック、実装・修正依頼ならさらに【レビュー粒度】ブロック（いずれも [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) 原文）を必ず含める**（省略不可。上記「モデル運用（必須）」参照） |
-| `< /dev/null` | 付けないと stdin を待って停止する |
+| 組立済みプロンプト | 正本の原文をゴール直後へ挿入し、grepで両見出しが各1件・未展開記号が0件と確認してから送る。実装・修正依頼はさらに【レビュー粒度】を含める |
+| `- < "$codex_prompt_file"` | プロンプトをstdinへ渡す。この方式に `< /dev/null` は重ねない |
 | `> {ログ} 2>&1` | 進捗ログを**捨てずに別ファイルへ**。メインコンテキストを汚さず、失敗理由も残る |
 | `echo "EXIT=$?"` | 成否判定。出力ファイルの存在・非空とあわせて確認する |
 
@@ -273,22 +306,26 @@ command -v agy && agy --version
 ```
 
 見つからない → **セットアップ手順を案内**（§4）してから Tier 3 へ（Antigravity は MCP 経路を持たないため Tier 2 を飛ばす）。
+バージョンが 1.1.10 以前なら `agy update` で更新する（1.1.10 以前は `--model` が無視され、`gemini-3.1-pro-high` を指定しても既定の Flash で実行されていた。ログで 31 件を確認済み）。
 
 ### 🔴 Step 1: モデルを必ず明示する
 
 **`agy` は Gemini 専用ではない。複数モデルを切り替えられる実行基盤である。**
-実測（v1.1.8）の `agy models` 出力:
+実測（agy 1.2.5、2026-09-18）の `agy models` 出力（ID のみ抜粋。表示名は `agy models` を正本とする）:
 
 ```
+gemini-3.8-flash-high / -medium / -low
+gemini-3.7-flash-high / -medium / -low
 gemini-3.6-flash-high / -medium / -low
-gemini-3.5-flash-high / -medium / -low
 gemini-3.1-pro-high / -low
 claude-sonnet-4-6
 claude-opus-4-6-thinking
 gpt-oss-120b-medium
 ```
 
-**既定は `Gemini 3.6 Flash`**（Pro ではない）。モデルを指定しないと、
+一覧は agy の更新で頻繁に変わる（1.1.8 → 1.2.5 で `gemini-3.5-flash-*` が消え、3.7 / 3.8 Flash が増えた）。使う前に `agy models` で確認する。
+
+**既定は Flash 系で、実測（agy 1.2.x、2026-09）では `Gemini 3.8 Flash (High)`**（Pro ではない）。モデルを指定しないと、
 §1 で期待した「視覚・空間推論とデザインの強み」は得られず、設定次第では Claude が選ばれて
 **独立視点そのものが失われる**。
 
@@ -298,6 +335,13 @@ gpt-oss-120b-medium
 | 軽量な確認・疎通 | 既定（Flash）で可 |
 
 **Claude 系モデルを選んだ場合は「独立視点」にならない。** 成果物には実際に使ったモデル名を必ず記録する。
+実際に使ったモデルは、実行後に `~/.gemini/antigravity-cli/log/cli-*.log` のうち **`Print mode: starting` を含む最新のログ**で `label="…"` を確かめる。
+単純に最新のログを取ると、`-p` 実行後に起動した `agy models` 等（print mode でない）のログを拾い、既定の Flash の label を実モデルと誤認する。ログが1件も無い場合は「ログなし」と出して終わる:
+
+```bash
+f=""; for c in $(ls -t ~/.gemini/antigravity-cli/log/cli-*.log 2>/dev/null); do grep -q 'Print mode: starting' "$c" && { f="$c"; break; }; done
+if [ -n "$f" ]; then echo "$f"; grep -o 'label="[^"]*"' "$f" | sort -u; else echo "ログなし"; fi
+```
 
 ### Step 2: 非対話実行の標準形
 

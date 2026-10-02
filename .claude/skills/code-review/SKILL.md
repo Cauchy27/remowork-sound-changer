@@ -9,8 +9,8 @@ description: |
   全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
-version: 3.3.0
-updated: 2026-08-21
+version: 3.3.5
+updated: 2026-09-24
 ---
 
 # 統合コードレビュースキル
@@ -125,7 +125,7 @@ Claude Code視点        Codex視点            Antigravity視点
 
 視点ごとに Tier 判定は独立に行う。**1視点が Tier 3 に落ちても、他の視点まで道連れにしない。**
 
-**重い一括レビューを CLI/MCP へ1発で投げると、成果物ゼロのままタイムアウトする。** 必ず観点単位・ファイル単位に分割すること。エラー対処・既知の失敗パターンの詳細は [`ai-cli-execution` スキル](../ai-cli-execution/SKILL.md)（[reference.md](../ai-cli-execution/reference.md) §5・§6 が正本）に従う。**本スキルでは再掲しない。**
+**MCP（Tier 2）は1リクエストが数分でタイムアウトするため、重い一括レビューを1発で投げると成果物ゼロのまま終わる。MCP では必ず観点単位・ファイル単位に分割すること。** CLI（Tier 1）ではタイムアウト由来の強制分割はせず論理単位で投げる（観点ごとに独立した結論が欲しい場合だけ分割する）が、出力はファイルで回収し、実行時間・出力・変更範囲に上限を置く（`agy --print-timeout 15m` 等）。どちらの経路でも判定単位（1ページ / 1機能）とレビュー回数は変えない。エラー対処・既知の失敗パターンの詳細は [`ai-cli-execution` スキル](../ai-cli-execution/SKILL.md)（[reference.md](../ai-cli-execution/reference.md) §5・§6 が正本）に従う。**本スキルでは再掲しない。**
 
 共通プロンプト雛形（4要素）・Claude Code/Codex/Antigravity 各視点の Step 0（疎通確認）/Step 1（レビュー実行）の実行コマンド全文・Tier 3（Task tool + ペルソナ）フォールバックのコード例は [reference.md](./reference.md) セクション1を参照。
 
@@ -275,10 +275,14 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 | バージョン | 日付       | 変更内容                                                                                  |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v3.3.5 | 2026-09-24 | 「3視点の起動方法」節の分割条件を MCP（Tier 2）に限定。CLI（Tier 1）はタイムアウト由来の強制分割をせず論理単位で投げ、出力のファイル回収と実行時間・出力・変更範囲の上限を置く形へ改め、ai-cli-execution（SKILL.md のフロー・reference.md §5・§6）と揃えた。判定単位（1ページ / 1機能）とレビュー回数は経路によらず不変と明記 |
+| v3.3.4 | 2026-09-18 | Codex 起動例の reasoning effort を親セッションの実測既定 xhigh へ揃え、【モデル運用】正本（codex-prompt-guideline.md）の「委託は明示起動に限る」改訂に追従 |
+| v3.3.3 | 2026-09-06 | Codexの原文複製を正本展開へ集約し、呼出し・非Bash経路・件数上限の確認を統一 |
+| v3.3.2 | 2026-09-06 | Claudeレビューの要求モデル明示・実行モデル証拠の記録と通常設定の権限制限を明確化 |
+| v3.3.1     | 2026-09-05 | `reference.md`・`agents/codex-reviewer.md`・`agents/code-checklist-13.md` の【モデル運用】ブロック原文と要約を GPT-6-Astra 世代へ改訂（codex-prompt-guideline.md の改訂に追従）。SKILL.md 本文の変更なし |
 | v3.3.0 | 2026-08-21 | 「レビュー対象の単位」セクションを新設。実装中に呼ばれた場合のレビュー対象を「1ページ / 1機能」単位に固定し、P0/P1 修正後の再確認は差分限定とした（配布元: _claude-skills-template v3.3.0） |
 | v3.2.4     | 2026-08-20 | SKILL.md 肥大化解消のため `reference.md` を新設し、3視点起動コマンド全文（共通プロンプト雛形・Claude Code/Codex/Antigravity の Step0/Step1・Tier3フォールバック）、第3層13項目→観点9対応表とBusiness Logic特記・ceo-reviewer/cmo-advisor起動テンプレート、統合レビュー結果テンプレート全文を移設。本文には各節の要約とリンクのみ残した |
 | v3.2.3     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「スコープを固定し過剰処理を防ぐ」に追随。「共通プロンプト雛形」節の注記、`agents/codex-reviewer.md`、`agents/code-checklist-13.md` の Codex 向けプロンプトへ、【モデル運用】ブロック直後に【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）を原文のまま挿入する旨を追加 |
-| v3.2.2     | 2026-08-19 | `.claude/docs/codex-prompt-guideline.md` に新設された絶対ルール「モデル役割分担ブロックを必ず入れる」に追随。「共通プロンプト雛形」節に、Codex（`codex exec`）実行時のみゴール文直後へ【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を挿入する旨の注記を追加（Claude Code / Antigravity 向けは対象外。続けて挿入する【スコープ】ブロックの追加は v3.2.3 参照） |
 | v3.2.1     | 2026-08-17 | `agy --print-timeout` の値を `900` から `15m` へ修正（単位なしの `900` は EXIT=2 でオプション不正となり Antigravity 視点が空出力で失敗していた。2026-08-17 実測で確定） |
 | v3.2.0     | 2026-08-16 | 並列修正で発生した正本間の矛盾・伝播漏れの是正（逐次修正）。「3視点の起動方法」節冒頭に外部送信リスクの注意（正本 review-matrix.md 参照）を追加。Antigravity 起動をパス渡しから内容埋め込み方式（`$(cat ...)`）へ修正し `--print-timeout 900`・`--output-format text`・出力先 `.md` を追加（従来はパスのみ渡す形で headless 実行時に読み取り不能・空出力になっていた）。共通プロンプト雛形に Antigravity 実行時は内容埋め込みが必須である旨を注記。Round 1 表頭「主担当の観点（正本の『主担当の観点』に準拠）」を「各視点の重点担当観点（コード実装向け）」へ改め、正本の対象横断定義とコード実装向け重点配分が別物である旨を明記。優先度表に正本「優先度の共通記法」（Critical/Major/Minor/Question/Positive）との対応列を追加。「レビューの姿勢」表に残存していたTier情報の断片（CLI > MCP > Task tool ペルソナ）を正本参照へ置換。Round 2 節に稼働視点数の確認ステップと正本「視点が縮退した場合の扱い」への明示参照を追加。Antigravity 起動コマンドにモデル名ハードコード注記（正本は ai-cli-execution/reference.md）を追加 |
 | v3.1.0     | 2026-08-16 | 内部整合性レビュー指摘の反映。「ここでは再掲しない」直後にTierテーブルを再掲していた自己矛盾を解消し正本参照へ一本化（`agents/codex-reviewer.md` の旧称「4視点」を「3視点（Codex自身がその1視点）」へ是正）。第3層対応表のBusiness Logic項目を観点6（経営・事業）一律対応から観点3（実装正確性）＋画面遷移サブ項目のみ観点1（要件充足）へ再割当し、真の経営判断が要る対象へ `ceo-reviewer`/`cmo-advisor` を追加起動する配線を新設。章順を実行フロー順（実行アーキテクチャ→横断ゲート→3視点の起動方法→第3層チェックリスト→Round構成）へ並べ替え。「3視点の起動方法」節に Codex/Antigravity の最小実行スニペット（Step0疎通確認・Step1レビュー実行）を追加しClaude Codeとの非対称を解消。横断ゲートに「3層構造に入る前の事前フィルタ」である旨を明記。CLIフラグの誤用を是正（`--tools`→`--allowedTools`。読み取り専用レビューは許可リストで制御するのが正しい）。レビューコメント優先度記法（[MUST]等）の定義箇所が本スキル内で単一である旨を明記（正本の共通記法策定待ち） |

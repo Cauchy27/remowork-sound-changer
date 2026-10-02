@@ -9,7 +9,7 @@ timestamp: 2026-08-02T00:00:00Z
 # 外部AIツール実行ポリシー（CLI 優先・3層モデル）
 
 Claude Code（`claude -p`。オーケストレーター本体からのネスト起動を含む）/ Codex / Antigravity という**3視点**を呼ぶ際の経路と担当領域を定める。**Claude Code 自身も対象に含む**（別プロセスとして起動する `claude -p` を、Codex/Antigravity と同格の視点として扱う）。
-プロンプトの書き方は [Codex プロンプト設計ガイドライン](codex-prompt-guideline.md) を参照（本ポリシーは経路と役割、あちらは中身）。Codex へ渡す全プロンプトには【モデル運用】ブロック（監督 = Sol / 実作業 = Luna Max / 大問題時のみ Sol・Terra）を必ず含める（省略不可。ブロック原文は同ガイドライン参照）。 【スコープ】ブロック（ゴール外の作業禁止・着手前の目的/代償/停止条件の自己確認3点）も必ず続けて含める。さらに**実装・修正を依頼する場合は【レビュー粒度】ブロック**（ループは「1ページ / 1機能」単位・実装単位が動作した時点で1回だけ・修正は P0/P1 のみ・再確認は修正差分に限定・1単位ごとにコミット）も必ず含める（レビュー専用依頼には入れない）。いずれも省略不可で、ブロック原文は同ガイドラインを正本とする。 なお **Luna の reasoning effort は必ず `max` を明示する**（`gpt-5.6-luna` の既定は `medium` のため、無指定では max にならない）。
+プロンプトの本文・適用層の理由は [Codex プロンプト設計ガイドライン](codex-prompt-guideline.md) を正本とする。Codexへの各依頼は、冒頭のゴール文直後に正本の【モデル運用】【スコープ】を全文展開し、送信本文で存在を確認する。実装・修正依頼には【レビュー粒度】も続ける（レビュー専用依頼には入れない）。CLI・非Bash経路とも同ガイドラインの展開・確認手順に従い、参照を示すだけで済ませない。
 
 **本ファイルが方針（対象ツールと担当領域・経路の優先順位）の正本。実行手順の正本は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md)。**
 
@@ -22,7 +22,7 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 | ツール | CLI | 強み |
 |--------|-----|------|
 | **Claude Code** | `claude -p`（オーケストレーター本体からのネスト起動。別プロセスとして独立実行） | 大コンテキスト推論、プロジェクト固有規約の理解、Agent Teams 並列実行 |
-| **Codex**（GPT-5.6 系） | `codex exec` | 実行・デバッグ・長期タスクの持続性。指摘が具体的で実行可能。ゴールへの執着が強く、中途半端な結論で止まらない |
+| **Codex**（GPT-6 系） | `codex exec` | 実行・デバッグ・長期タスクの持続性。指摘が具体的で実行可能。ゴールへの執着が強く、中途半端な結論で止まらない |
 | **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-3.1-pro-high` | **Gemini 3.1 Pro 指定時**、視覚・空間推論とデザインで主要マルチモーダルベンチマーク首位級。2D UI/UX とグラフィカルプログラミングの理解が native |
 
 ### 観点の割り当て指針
@@ -35,7 +35,7 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 
 > 根拠: Codex は Artificial Analysis Coding Agent Index で Codex harness 首位、長期実行・ツール使用・エージェント制御が native。Gemini 3 系は視覚・空間推論ベンチマークとウェブサイトデザイン評価で首位。
 >
-> ⚠️ **`agy` は Gemini 専用ではない**（Claude・GPT-OSS も選べる）。既定は Gemini 3.6 Flash のため、上記の強みを得るには `--model` の明示が必須。詳細は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md) §6。
+> ⚠️ **`agy` は Gemini 専用ではない**（Claude・GPT-OSS も選べる）。既定は Flash 系（実測 agy 1.2.x で Gemini 3.8 Flash）のため、上記の強みを得るには `--model` の明示が必須。詳細は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md) §6。
 
 ---
 
@@ -51,6 +51,8 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 
 **CLI を飛ばして MCP・Claude 代替を選ぶことは禁止。** Tier を下げるたびに理由を成果物へ記録する。
 
+Claude の独立 CLI は要求モデルを引数で明示し、親内サブエージェントは呼出指定・登録定義・環境既定を含むモデル解決順（正本はテンプレートリポジトリの agent-model-tuning.md。配布対象外）で確認する。`CLAUDE_CODE_SUBAGENT_MODEL` が未指定時の既定に関与するため、Tier 3 の視点名をモデルの証拠とせず、[独立性の申告](review-matrix.md) に要求モデル・実行モデル・根拠・起動経路を残す。
+
 ### CLI を最優先する理由
 
 | 観点 | CLI | MCP |
@@ -60,6 +62,20 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 | コンテキスト | 出力をファイルへ逃がせるためメインを圧迫しない（実測: 1レビューの生ログは数百KB規模） | 応答が丸ごとコンテキストに載る |
 | レビュー機能 | `codex exec review` のネイティブ差分レビューが使える | 相当機能なし |
 | 権限制御 | `-s read-only` でサンドボックス指定 | MCP サーバー設定に依存 |
+
+---
+
+## Claude Code MCP経路とcommit検査
+
+`claude mcp serve` はClaude Codeのツールを公開するサーバーであり、レビュー用の独立Claude実行を置き換えるTier 2ではない。個々の呼出確認はクライアント側の責任になる。[公式MCP仕様](https://code.claude.com/docs/en/mcp#use-claude-code-as-an-mcp-server)
+
+本体の `mcp__claude-code__*` 包括allowは、2026-09-06に `claude mcp serve` の `tools/list`（server `claude/tengu` 2.1.261）で確認した `mcp__claude-code__Read` だけへ限定した。この公開一覧にGlob/Grepは無かったため追加していない。書込・Bash・その他のツールは包括許可から外し、既存のdeny/askと通常の権限判定に戻す。将来の追加はその環境の公開一覧と用途を確認して判断する。
+
+PreToolUseのmatcherは `Bash|mcp__claude-code__.*`。MCP Bashの明示的なcommitは、外側のhookからサーバーのcwd/indexを確定できないため阻止し、native Bashの `git -C <対象repo> commit` 単独実行へ移す。非commitのMCP操作を一律denyにはしない。MCP内部の独自検査の有無は未確認であり、この変更は実データ流出の発生を前提にしない。
+
+commitはstageと分け、検査対象を確定したindexに固定する。成功・対象外はhookから追加のallowを返さず通常permissionsへ戻し、違反・入力不正・検証器異常・内部期限超過はexit 2で阻止する。設定のtimeout到達では判定が失われるため、180秒の外側timeoutより短い150秒の内部deadlineを設ける。[公式hook仕様](https://code.claude.com/docs/en/hooks#timeouts)
+
+対象版と必須内部構造レビュー結果の対応は skill-creation-flow.md の証跡契約に従う。任意のスクリプト内・外部CLIのcommitや、hook終了後の別プロセスによるindex変更まで保証するものではない。配布時の設定・helper同梱は、存在する配布テンプレートのREADMEを確認する。
 
 ---
 

@@ -27,8 +27,7 @@
 
 **Antigravity（`agy`）実行時のみ、【対象ファイル】をパスのまま渡さず、内容を `cat` で取得してプロンプトへ直接埋め込むこと。** headless 実行はファイル読み取りが auto-deny されうるため、パスだけでは空出力になる（詳細は下記「Antigravity 視点」節）。
 
-**Codex（`codex exec`）実行時のみ、ゴール文の直後に【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を原文のまま挿入すること。** 詳細・原文は [`.claude/docs/codex-prompt-guideline.md`](../../docs/codex-prompt-guideline.md) を参照（Claude Code / Antigravity 向けには不要）。
-**同じく Codex 実行時のみ、続けて【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）も原文のまま挿入すること。** 原文は同ガイドラインを参照。
+**Codex実行時のみ**、ゴール文の直後に [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) の【モデル運用】【スコープ】を全文展開し、送信本文で確認する。CLIは下記の組立・grep手順、非Bash経路は同ガイドラインの文字列展開手順を使う。Claude Code / Antigravity向けには挿入しない。
 
 3視点とも、下記の Step 0（疎通確認）→ Step 1（レビュー実行、上記プロンプト雛形を埋めて使用）の順で直接実行できる。
 
@@ -40,15 +39,19 @@
 
 ```bash
 mkdir -p .tmp/ai-review
-claude -p --allowedTools "" "Reply with exactly: PONG" > .tmp/ai-review/claude-probe.log 2>&1; echo "EXIT=$?"
+: "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "" "Reply with exactly: PONG" > .tmp/ai-review/claude-probe.log 2>&1; echo "EXIT=$?"
 ```
 
 `EXIT=0` かつ出力に `PONG` があれば疎通OK。**認証エラー（`Failed to authenticate` 等）が出た場合、ネストした CLI 実行では親セッションと別の OAuth セッションを要求されることがある。** その場合はユーザーに `claude auth` 状態の確認を案内したうえで Tier 3 へフォールバックする。
 
 #### Step 1: レビュー実行
 
+要求モデル・実行モデル・根拠・起動経路を成果物へ記録する。実行モデルが確認できない場合は未確認とする。選定と権限制限の正本は [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §4.5。
+
 ```bash
-claude -p --allowedTools "Read,Grep,Glob" --output-format text "{上記の4要素プロンプトを埋めたもの}" > .tmp/ai-review/claude-review.md 2> .tmp/ai-review/claude-review.log
+: "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text "{上記の4要素プロンプトを埋めたもの}" > .tmp/ai-review/claude-review.md 2> .tmp/ai-review/claude-review.log
 echo "EXIT=$?"
 ```
 
@@ -62,17 +65,44 @@ echo "EXIT=$?"
 
 #### Step 0: 疎通確認
 
-```bash
-codex exec -s read-only -o .tmp/ai-review/codex-probe.md "ゴールは PONG とだけ返すこと。" < /dev/null > .tmp/ai-review/codex-probe.log 2>&1; echo "EXIT=$?"
-```
+下記Step 1の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/codex-probe.md` / `codex-probe.log` に替えて疎通を確認する。正本ブロックは維持する。
 
 #### Step 1: レビュー実行
 
 ```bash
-codex exec -s read-only -o .tmp/ai-review/codex-review.md "{上記の4要素プロンプトを埋めたもの}" < /dev/null > .tmp/ai-review/codex-review.log 2>&1; echo "EXIT=$?"
+codex_guard_blocks=$(awk '
+$0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
+$0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
+$0 == "<!-- codex-prompt-scope:start -->" { if (step != 2) exit 1; step=3; next }
+$0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
+step == 1 || step == 3 { print }
+END { if (step != 4) exit 1 }
+' .claude/docs/codex-prompt-guideline.md) || exit 1
+codex_prompt_file=".tmp/ai-review/codex-prompt.txt"
+{
+  cat <<'CODEX_GOAL'
+ゴールは {対象} を観点 {観点番号・名称} でレビューし、優先度付きの指摘を返すこと。
+CODEX_GOAL
+  printf '\n%s\n\n' "$codex_guard_blocks"
+  cat <<'CODEX_TASK'
+【対象ファイル】{ファイルパスを明示列挙}
+【観点】{正本の観点番号・名称}
+【チェックリスト】.claude/skills/code-review/agents/code-checklist-13.md の該当項目を用いる
+【制約】根拠となる行番号を添える。ファイルを実際に読んでから判定する（憶測禁止）。修正は行わない
+【完了条件】各指摘に優先度・行番号・内容を揃える。0件なら「指摘なし」と判断根拠を返す
+【出力形式】テーブル
+CODEX_TASK
+} > "$codex_prompt_file" || exit 1
+[ "$(grep -cFx '【モデル運用】' "$codex_prompt_file")" -eq 1 ] &&
+[ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
+! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
+grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
+codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
+  -o ".tmp/ai-review/codex-review.md" - < "$codex_prompt_file" > ".tmp/ai-review/codex-review.log" 2>&1
+echo "EXIT=$?"
 ```
 
-`-s read-only` を必ず付ける（読み取り専用）。`< /dev/null` を付けないと stdin 待ちで停止する。`-o` は出力先ディレクトリを先に作らないと書き込みに失敗する。CLI 未設定時のセットアップ案内・MCP フォールバック（Tier 2、タスク分割必須）・ネイティブ差分レビュー（`codex exec review`）は [ai-cli-execution](../ai-cli-execution/SKILL.md) を参照。
+`-s read-only` を必ず付ける（読み取り専用）。この例は `- < "$codex_prompt_file"` で本文を渡す。引数でプロンプトを渡す例やネイティブ差分レビューでは `< /dev/null` を使う。`-o` は出力先ディレクトリを先に作らないと書き込みに失敗する。CLI 未設定時のセットアップ案内・MCP フォールバック（Tier 2、タスク分割必須）・ネイティブ差分レビュー（`codex exec review`）は [ai-cli-execution](../ai-cli-execution/SKILL.md) を参照。
 
 ### Antigravity 視点（`agy`）
 

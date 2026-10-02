@@ -5,12 +5,13 @@
 
 `.claude/skills` を正本、`.agents/skills` を Codex / Antigravity 参照ラッパーとして運用する。
 
-| 項目 | 現状 |
-|------|------|
-| 共通スキル | 8件（standalone 4 / agent-teams 3 / subagent 1） |
-| Codex / Antigravity ラッパー | 8件 |
-| スキル内サブエージェント | 7件（sonnet 7） |
-| ペルソナエージェント | 0件（なし） |
+件数は固定値を書かず、リポジトリ直下で次のコマンドを実行して実測する。
+
+- 共通スキル数: `find .claude/skills -mindepth 1 -maxdepth 1 -type d | wc -l`
+- execution_type の内訳（frontmatter に限って数える）: `for t in standalone agent-teams hybrid subagent; do printf "%s %s\n" "$t" "$(for f in .claude/skills/*/SKILL.md; do sed -n '2,/^---$/p' "$f" | grep -q "^execution_type: $t" && echo x; done | wc -l)"; done`
+- Codex / Antigravity ラッパー数: `find .agents/skills -mindepth 1 -maxdepth 1 -type d | wc -l`
+- スキル内サブエージェント数: `find .claude/skills -path '*/agents/*.md' | wc -l`
+- ペルソナエージェント数: `find .claude/agents -name '*.md' | wc -l`
 
 - 全 `SKILL.md` は `execution_type` を `standalone` / `agent-teams` / `subagent` / `hybrid` のいずれかで指定する。
 - スキル内サブエージェント（`.claude/skills/*/agents/*.md`）は frontmatter の `model:` で実効モデルを明示する。

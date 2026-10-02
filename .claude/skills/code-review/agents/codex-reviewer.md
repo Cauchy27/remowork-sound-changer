@@ -33,8 +33,7 @@ sonnet
 - **全プロンプトは冒頭に「ゴールは〜」で始まる1文**を置き、成果を検証可能な形で明示する
 - 4要素（ゴール / コンテキスト / 制約 / 完了条件）で構成する
 - テンプレート・注意点の詳細は [`.claude/docs/codex-prompt-guideline.md`](../../../docs/codex-prompt-guideline.md) を参照
-- ゴール文の直後には【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を必ず含めること
-- 続けて【スコープ】ブロック（ゴール外禁止・着手前3点自己確認）も必ず含めること
+- ゴール文の直後へ正本の【モデル運用】【スコープ】を全文展開し、送信する本文で確認する。CLIはStep 2の組立・grep手順、非Bash経路は同ガイドラインの文字列展開手順に従う
 
 ## 実行手順
 
@@ -55,9 +54,7 @@ command -v codex && codex --version
 mkdir -p .tmp/ai-review && git check-ignore -q .tmp/ai-review && echo "IGNORED_OK"
 ```
 
-```bash
-codex exec -s read-only -o .tmp/ai-review/probe.md "ゴールは PONG とだけ返すこと。" < /dev/null > .tmp/ai-review/probe.log 2>&1; echo "EXIT=$?"
-```
+Step 2の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log` に替えて1回実行する。正本ブロックは維持する。
 
 `EXIT=0` かつ出力ファイルに `PONG` が入っていれば疎通OK。失敗理由は `probe.log` に残る。認証エラーならセットアップ案内 → MCP フォールバックへ。
 
@@ -76,35 +73,41 @@ codex exec -s read-only review -o .tmp/ai-review/diff-review.md --uncommitted < 
 ファイル単位・観点単位のレビューは `codex exec` を使う。
 
 ```bash
-codex exec -s read-only -o .tmp/ai-review/review-{観点}.md "$(cat <<'EOF'
-ゴールは {1ファイル} を {1観点} でレビューし、優先度付きの指摘3〜5件を返すこと。
-
-【モデル運用】
-- あなた（GPT-5.6-Sol）は監督役。自分で実装・調査を抱え込まず、実作業はサブエージェント（GPT-5.6-Luna / reasoning effort: max）へ委託する。**effort は必ず `max` を明示する**（Luna の既定は `medium` のため、無指定では max にならない）
-- 大きな問題（設計上の欠陥・原因不明の不具合・広範囲に影響する仕様矛盾）を見つけた時だけ、GPT-5.6-Sol または GPT-5.6-Terra をサブエージェントとして個別に起動し、調査・修正させる
-- 上記以外の通常作業で Sol / Terra を起動しない
-
-【スコープ】
-- ゴールに直接必要な変更だけを行う。ついで修正・周辺リファクタ・体裁調整・命名の統一は行わない
-- ゴールの前提に矛盾・欠落を見つけたら、勝手に補完・拡大解釈せず、作業を止めて指摘として返す
-- 着手前に次の3点を自己確認する。答えられない項目があれば、実装ではなく質問を返す
-  1. 目的: この作業は何のためか。誰の何が変わるか
-  2. 代償: この変更で失われるもの・増える運用負荷は何か
-  3. 停止条件: どこまでやったら完了か。それ以上やらない線はどこか
-
+codex_guard_blocks=$(awk '
+$0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
+$0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
+$0 == "<!-- codex-prompt-scope:start -->" { if (step != 2) exit 1; step=3; next }
+$0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
+step == 1 || step == 3 { print }
+END { if (step != 4) exit 1 }
+' .claude/docs/codex-prompt-guideline.md) || exit 1
+codex_prompt_file=".tmp/ai-review/review-{観点}-prompt.txt"
+{
+  cat <<'CODEX_GOAL'
+ゴールは {1ファイル} を {1観点} でレビューし、根拠付きの指摘を0〜5件返すこと。
+CODEX_GOAL
+  printf '\n%s\n\n' "$codex_guard_blocks"
+  cat <<'CODEX_TASK'
 【対象ファイル】{1ファイル}
 【観点】{1観点（例: セキュリティリスク）}
-【制約】根拠となる行番号を添える。ファイルを実際に読んでから判定する（憶測禁止）
-【完了条件】各指摘に 優先度（[MUST]/[SHOULD]/[NIT]）・行番号・内容 が揃っている
+【制約】根拠を優先し、件数を埋めない。ファイルを実際に読み、根拠となる行番号を添える（憶測禁止）。修正は行わない
+【完了条件】各指摘に優先度（[MUST]/[SHOULD]/[NIT]）・行番号・内容を揃える。0件なら「指摘なし」と判断根拠を返す
 【出力形式】テーブル
-EOF
-)" < /dev/null > .tmp/ai-review/review-{観点}.log 2>&1; echo "EXIT=$?"
+CODEX_TASK
+} > "$codex_prompt_file" || exit 1
+[ "$(grep -cFx '【モデル運用】' "$codex_prompt_file")" -eq 1 ] &&
+[ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
+! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
+grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
+codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
+  -o ".tmp/ai-review/review-{観点}.md" - < "$codex_prompt_file" > ".tmp/ai-review/review-{観点}.log" 2>&1
+echo "EXIT=$?"
 ```
 
 - `-s read-only` を必ず付ける（レビューは読み取りのみ）
 - `-o` は**正常終了時に最終メッセージだけ**を保存する。途中経過は残らない
 - 進捗ログは捨てずに別ファイルへ流す（実測で数百KB。メインへ流さず、失敗理由は残す）
-- `< /dev/null` を付けないと stdin 待ちで停止する
+- 上記は `- < "$codex_prompt_file"` で本文をstdinへ渡す。プロンプトを引数で渡す例・ネイティブ差分レビューは `< /dev/null` を使う
 - 結果を読む前に **EXIT・ファイル存在・非空** の3点を確認する
 - CLI ではタイムアウト由来の強制分割は不要。ただし観点ごとに独立した結論が欲しい場合は分割・並列実行してよい
 
@@ -129,8 +132,8 @@ EOF
 
 CLI が使えない場合のみ。**MCP は1リクエストが数分でタイムアウトするため、タスク分割が必須。**
 
-1. 軽量プロンプト（`Reply with exactly: PONG`）で `mcp__codex__codex` を1回呼び、疎通確認と threadId 取得
-2. `mcp__codex__codex-reply` で同一 threadId に「1ファイル / 1観点 / 主張3〜5件」を1件ずつ投入
+1. ガイドラインの非Bash手順で正本全文を展開した軽量依頼（ゴールは PONG とだけ返すこと）を `mcp__codex__codex` へ1回送り、疎通確認と threadId を取得
+2. `mcp__codex__codex-reply` で同一 threadId に「1ファイル / 1観点 / 根拠のある主張0〜5件」を1件ずつ投入する。各 `prompt` に正本全文を展開し、送信前に原文一致・未展開記号0件を確認する
 3. **結果はテキストで返させる**（タイムアウトするとファイル書き出しも消えるため）
 4. 同じ単位が2回タイムアウトしたら、その単位は Tier 3 へ回す
 
@@ -156,12 +159,11 @@ Codex: 利用不可（CLI / MCP とも疎通せず）。Claude Code の別視点
 - [ ] CLI が使える環境で MCP を選んでいない（Tier を下げた場合は理由を記載している）
 - [ ] CLI 未設定を検出した場合、フォールバック前にセットアップ手順を案内している
 - [ ] 実行前に `mkdir -p .tmp/ai-review` で出力先を用意している
-- [ ] CLI 実行時に `-s read-only`・`-o {ファイル}`・`< /dev/null`・ログの別ファイル出力を付けている
+- [ ] CLI 実行時に `-s read-only`・`-o {ファイル}`・ログの別ファイル出力を付け、組立済み本文はstdin、引数渡し・ネイティブ差分レビューは `< /dev/null` を使っている
 - [ ] `codex exec review` に対象指定と観点プロンプトを併用していない（exit 2 になる）
 - [ ] 結果を読む前に EXIT・ファイル存在・非空の3点を確認している
 - [ ] 各プロンプトが「ゴールは〜」で始まり4要素（ゴール/コンテキスト/制約/完了条件）を含んでいる
-- [ ] 各プロンプトのゴール文直後に【モデル運用】ブロック（監督=Sol / 実作業=Luna Max / 大問題時のみ Sol・Terra）を原文のまま含んでいる
-- [ ] 続けて【スコープ】ブロックを原文のまま含んでいる
+- [ ] 送信する各プロンプトのゴール文直後に正本の【モデル運用】【スコープ】が原文どおり各1件あり、未展開記号が0件であると確認した（CLIは組立済みファイルをgrep、非Bashは実引数を確認）
 - [ ] 結果統合テーブルに実行経路（CLI / MCP / 利用不可）を明記している
 - [ ] 優先度（MUST/SHOULD/NIT）がCodexの実際の指摘内容から機械的に転記されている（追加の主観判定をしていない）
 
@@ -197,7 +199,7 @@ ESCALATION: {理由を1文}
 - 出力先ディレクトリを作らずに `-o` を指定し、書き込み失敗で結果を失う
 - `codex exec review --uncommitted "観点"` のように対象指定とプロンプトを併用して exit 2 になる
 - 進捗ログを `/dev/null` に捨て、失敗時に理由が追えなくなる
-- `< /dev/null` を付けず stdin 待ちで停止する
+- プロンプト引数渡し・ネイティブ差分レビューで `< /dev/null` を付けず、または本文をstdinへ渡す指定を欠かして待機する
 - MCP 経路で分割せずに13項目チェックリストを1発で投げてタイムアウトさせる
 
 ## 統合レビューへの貢献

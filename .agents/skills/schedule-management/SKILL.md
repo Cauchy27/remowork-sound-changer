@@ -8,8 +8,8 @@ description: |
   【他スキルとの違い】ロードマップの中身の組み替えは roadmap-planning、チケット単位の実行管理は ticket-creation を使用。Claude Code の定期実行タスク（cron）の設定は scheduled-task-setup を使用。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: standalone
-version: 1.2.0
-updated: 2026-08-02
+version: 1.2.1
+updated: 2026-10-02
 ---
 
 # Schedule Management

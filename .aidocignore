@@ -1,0 +1,12 @@
+# パス 1（2026-09 S7）: 例示・履歴・実行時生成物・タグ blob 内在の参照（C2=A）
+バッククォート参照が実在しない: \.claude/docs/progress-tracking-model\.md -> \.claude/roadmap\.md$
+バッククォート参照が実在しない: \.claude/docs/progress-tracking-model\.md -> \.claude/schedule\.md$
+バッククォート参照が実在しない: \.claude/docs/progress-tracking-model\.md -> \.claude/skills/ticket-creation/SKILL\.md$
+バッククォート参照が実在しない: \.claude/docs/review-matrix\.md -> scripts/validate-structure\.sh$
+バッククォート参照が実在しない: \.claude/docs/skill-self-improvement\.md -> scripts/validate-skill-self-improvement\.py$
+バッククォート参照が実在しない: \.claude/skills/architecture/SKILL\.md -> \.docs/adr/README\.md$
+バッククォート参照が実在しない: \.claude/skills/architecture/reference\.md -> \.docs/adr/README\.md$
+バッククォート参照が実在しない: \.claude/skills/roadmap-planning/SKILL\.md -> \.claude/roadmap\.md$
+バッククォート参照が実在しない: \.claude/skills/roadmap-planning/SKILL\.md -> \.claude/schedule\.md$
+バッククォート参照が実在しない: \.claude/skills/schedule-management/SKILL\.md -> \.claude/roadmap\.md$
+バッククォート参照が実在しない: \.claude/skills/schedule-management/SKILL\.md -> \.claude/schedule\.md$

@@ -14,6 +14,19 @@ tags: [agent, skill, invocation, convention]
 Claude Code が `subagent_type` に解決するのは **`.claude/agents/**/*.md` のみ**。
 `.claude/skills/{skill}/agents/*.md` は登録されない。スキル内蔵の md を `subagent_type` に指定しても起動できない。
 
+### 登録定義・手順素材・起動引数・設定の役割
+
+全 `SKILL.md` は `execution_type` を `standalone` / `agent-teams` / `subagent` / `hybrid` のいずれかで指定する。実行方式の区分と、以下のモデル指定の役割を分けて扱う。
+
+| 区分 | 役割 | モデル指定の扱い |
+| --- | --- | --- |
+| 登録定義 `.claude/agents/**/*.md` | `subagent_type` で選ぶ実行役割 | frontmatter はハーネスが解釈する。呼出指定や環境設定も含めて実行モデルを確認する |
+| 手順素材 `.claude/skills/*/agents/*.md` | prompt へ読み込む指示・チェック項目 | frontmatter の `model` は任意の推奨値（構造検査の対象外）。読むだけでは実行モデルを変更しない |
+| 起動引数 | Task の `model` や CLI の `--model` | 呼出側が素材の推奨と依頼条件を照合して明示する。独立 CLI は親内 Task と区別する |
+| 設定 | ハーネスの既定値・環境変数・利用可能モデル制限 | 指定の有無に応じて解決に関与する。正本はテンプレートリポジトリの agent-model-tuning.md（配布対象外）の前提、レビュー時の記録は [review-matrix.md](review-matrix.md) の独立性申告 |
+
+素材の frontmatter 必須方針と `agents/pages/*.md` の例外はテンプレートリポジトリの frontmatter-policy.md（配布対象外）に従う。素材の `model` を CLI 引数へ自動転送する仕組みはなく、呼出側で指定・確認する。
+
 ## 3 つの記述形式
 
 ### 形式A: 専用エージェント起動
@@ -50,8 +63,6 @@ Task(
 )
 ```
 
-実装例: [troubleshooting/SKILL.md](../skills/troubleshooting/SKILL.md)
-
 ### 形式C: ペルソナ + 手順素材
 
 グローバルに**汎用ペルソナ**があり、スキル側に**そのペルソナで実行させたい固有手順**がある場合。
@@ -69,7 +80,16 @@ Task(
 )
 ```
 
-実装例: [internal-structure-review/SKILL.md](../skills/internal-structure-review/SKILL.md)（ただし正本の実行経路は実CLI優先。この形式C は Tier 3 代替時のみ使う。詳細: `.claude/docs/review-matrix.md`）
+## 補助ペルソナの用途
+
+正式なレビュー視点の採否は [review-matrix.md](review-matrix.md#採用しない視点) を正本とする。`cursor` / `copilot` / `gemini` のペルソナを使っても、正式な独立視点の数は増えない。
+補助的に観点を整理する場合は形式A、スキル固有の手順を併せる場合は形式Cを使い、依頼範囲と使用する観点を明示する。
+
+| ペルソナ | 補助用途 |
+| --- | --- |
+| `cursor` | 局所的なコード品質・開発体験（DX）・ファイル内整合性の確認 |
+| `copilot` | パターン一貫性・テスト網羅性・補完品質の確認 |
+| `gemini` | UI/UX・データフロー・スケーラビリティ等の観点整理 |
 
 ## 形式の選び方
 
@@ -111,4 +131,4 @@ SKILL.md だけを配布すると、参照先が配布先に存在せず**起動
 ## 横展開時の注意
 
 配布先リポジトリでは、そのリポジトリで**使用実績のないエージェントは削除してよい**。
-本テンプレートは全 112 体を保持するが、配布先は実態に合わせて絞り込む。
+本テンプレートは共通エージェント定義を保持し、配布先は実態に合わせて絞り込む。現在の総数は `.claude/agents/` の定義を実測し、数値を記録する場合は測定日・対象範囲・除外条件を併記する。

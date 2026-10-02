@@ -184,5 +184,3 @@ tools: Read, Glob, Grep, Write, WebSearch, WebFetch
 
 | ドキュメント | 用途 |
 |-------------|------|
-| `.claude/docs/meta-ads-copy-patterns.md` | 広告コピーパターン集 |
-| `.claude/docs/competitor-analysis.md` | 競合分析レポート |

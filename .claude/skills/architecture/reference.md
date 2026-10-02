@@ -194,9 +194,6 @@ status: 確定
 
 | subagent_type | 役割 | 定義 |
 | --- | --- | --- |
-| `solution-architect` | システム全体設計・非機能要件（スケーラビリティ/可用性）の観点で評価 | `.claude/agents/development/solution-architect.md` |
-| `cto` | 技術戦略・長期的な技術負債リスクの観点で評価 | `.claude/agents/executive/cto.md` |
-| `tech-lead` | 実装難易度・チームの習熟度・保守性の観点で評価 | `.claude/agents/development/tech-lead.md` |
 
 ```markdown
 Task(

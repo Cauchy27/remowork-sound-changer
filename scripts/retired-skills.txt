@@ -1,0 +1,8 @@
+# name<TAB>retired_on<TAB>successor<TAB>note
+# 実体の無いスキル名の対応表。validate-ai-docs.sh [10] と skill-creation/reference.md §6 が読む。
+# 区切りは TAB 固定。# 始まりの行と空行は無視する。
+# 以下 3 行は本体で物理削除済みの既知分（scripts/skill-classification.csv の管理外・手書き）。
+# 以後の廃止分は `python3 scripts/skill-classification.py --emit retired` の出力を末尾へ追記する。
+dual-ai-meter	2026-07-31	-	計測系を aggregate-ai-usage.py へ統合
+daily-handover	2026-07-03	-	日次申し送り運用の廃止
+daily-personal-report	2026-07-03	-	同上
