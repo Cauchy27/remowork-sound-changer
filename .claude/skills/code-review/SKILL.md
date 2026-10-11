@@ -9,8 +9,8 @@ description: |
   全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
-version: 3.3.5
-updated: 2026-09-24
+version: 3.3.6
+updated: 2026-10-11
 ---
 
 # 統合コードレビュースキル
@@ -275,6 +275,7 @@ Round 1 の一致した指摘、Round 2 の裁定結果、横断ゲートで得�
 
 | バージョン | 日付       | 変更内容                                                                                  |
 | ---------- | ---------- | ----------------------------------------------------------------------------------------- |
+| v3.3.6 | 2026-10-11 | `reference.md`・`agents/codex-reviewer.md` の Codex 起動例について Codex の実行モデルを GPT-6-Astra から GPT-6.1-Sol（xhigh）へ変更（codex-prompt-guideline.md の改訂に追従）。SKILL.md 本文の変更なし |
 | v3.3.5 | 2026-09-24 | 「3視点の起動方法」節の分割条件を MCP（Tier 2）に限定。CLI（Tier 1）はタイムアウト由来の強制分割をせず論理単位で投げ、出力のファイル回収と実行時間・出力・変更範囲の上限を置く形へ改め、ai-cli-execution（SKILL.md のフロー・reference.md §5・§6）と揃えた。判定単位（1ページ / 1機能）とレビュー回数は経路によらず不変と明記 |
 | v3.3.4 | 2026-09-18 | Codex 起動例の reasoning effort を親セッションの実測既定 xhigh へ揃え、【モデル運用】正本（codex-prompt-guideline.md）の「委託は明示起動に限る」改訂に追従 |
 | v3.3.3 | 2026-09-06 | Codexの原文複製を正本展開へ集約し、呼出し・非Bash経路・件数上限の確認を統一 |

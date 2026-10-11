@@ -97,7 +97,7 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
+codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
   -o ".tmp/ai-review/codex-review.md" - < "$codex_prompt_file" > ".tmp/ai-review/codex-review.log" 2>&1
 echo "EXIT=$?"
 ```

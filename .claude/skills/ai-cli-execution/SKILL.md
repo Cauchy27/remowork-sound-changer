@@ -7,8 +7,8 @@ description: |
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Grep, Glob, Bash, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: standalone
-version: 1.1.11
-updated: 2026-09-18
+version: 1.1.12
+updated: 2026-10-11
 ---
 
 # AIツール実行スキル（実CLI3視点・CLI 優先・3層モデル）
@@ -69,6 +69,7 @@ Codexへの各依頼は、冒頭のゴール文直後に [codex-prompt-guideline
 
 | バージョン | 日付 | 変更内容 |
 |-----------|------|----------|
+| v1.1.12 | 2026-10-11 | reference.md §5 の Codex 起動例について Codex の実行モデルを GPT-6-Astra から GPT-6.1-Sol（xhigh）へ変更（codex-prompt-guideline.md の改訂に追従） |
 | v1.1.11 | 2026-09-18 | Codex 起動例の reasoning effort を親セッションの実測既定 xhigh へ揃え、【モデル運用】正本（codex-prompt-guideline.md）の「委託は明示起動に限る」改訂に追従 |
 | v1.1.10 | 2026-09-18 | reference.md §6 の `agy models` 表を agy 1.2.5 実測へ更新（3.7 / 3.8 Flash 追加・3.5 Flash 削除）し、既定モデルを実測で 3.8 Flash へ訂正。1.1.10 以前の `--model` 無視の注意と、ログで実モデルを確かめる手順を追記。ai-cli-execution-policy.md と antigravity ペルソナの既定モデル記述も追従 |
 | v1.1.9 | 2026-09-08 | 実装用プロンプトのコミット指示を元ユーザーの明示依頼時に限定し、依頼がない場合は検証済み・未コミットで完了する条件を明記 |
