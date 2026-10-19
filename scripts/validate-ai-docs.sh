@@ -16,8 +16,11 @@
 #   [2] SKILL.md の name: とディレクトリ名の一致
 #   [3] .claude/agents/**/*.md の frontmatter（name:・description:）
 #  [3b] エージェント定義の name: とファイル名の一致
+#  [3w] エージェント定義の model: 欠落（警告。親継承でも `model: inherit` と書く。
+#       .claude/docs/frontmatter-policy.md §2。[1]〜[9] の FAIL 基準は変えない）
 #   [4] Markdown リンクが指すリポジトリ内パスの実在（リンク切れ検出）
-#  [4b] バッククォート表記のリポジトリ内パスの実在（警告。刈り込み後の死に参照検出）
+#  [4b] バッククォート表記のリポジトリ内パスの実在（警告。刈り込み後の死に参照検出。
+#       対象の接頭辞は .claude/ .agents/ .docs/ .workflows/ templates/ scripts/ docs/）
 #   [5] 未置換プレースホルダ（{UPPER_CASE} 形式）の残存（ルート4文書 = FAIL）
 #  [5b] 同上（.claude/skills|docs|rules 配下 = WARN。配備時のローカライズ漏れ検出用）
 #   [6] .claude/ .agents/ 配下のファイル名・ディレクトリ名の多バイト文字（.docs/ docs/ は WARN）
@@ -26,27 +29,66 @@
 #   [9] ルート CLAUDE.md の存在（Claude Code が読む正規位置）
 #  [10] 実体の無いスキル名の参照（廃止一覧 scripts/retired-skills.txt の名前が本文に残っていないか。
 #       別欄集計。[1]〜[9] の RESULT 行・終了コードには含めない）
+#  [11] 名指し表の名前の実在（警告。CLAUDE.md と templates/CLAUDE.md の「## スキル参照」節の表にある
+#       バッククォート名が .claude/skills/<name>/ に在るか。表が無ければ 0 件として集計し SKIP にしない）
 #
 # 使い方:
 #   bash scripts/validate-ai-docs.sh            # 全項目
-#   bash scripts/validate-ai-docs.sh 4          # 項目4のみ
+#   bash scripts/validate-ai-docs.sh 4          # 項目4のみ（引数は項目番号 1〜11 を1つだけ。3=[3][3b][3w]・4=[4][4b]・5=[5][5b]・6=[6][6w]）
 #   bash scripts/validate-ai-docs.sh 10         # [10] のみ（FAIL=1 / 未検査（廃止一覧なし）=2 / それ以外=0）
+#   bash scripts/validate-ai-docs.sh 11         # [11] のみ（WARN 級。AIDOC_STRICT=1 のときだけ WARN で exit 1）
+#   bash scripts/validate-ai-docs.sh --help     # この使い方を表示
 #   AIDOC_STRICT=1 bash scripts/validate-ai-docs.sh   # WARN も FAIL 扱い
-#   AIDOC_ROOT=/path/to/repo bash scripts/validate-ai-docs.sh  # 他リポジトリを対象に実行
+#   AIDOC_ROOT=/path/to/repo bash scripts/validate-ai-docs.sh  # 他リポジトリを対象に実行（対象は引数ではなく環境変数で渡す）
 #   AIDOC_RETIRED_LIST=/abs/path/retired-skills.txt bash scripts/validate-ai-docs.sh  # [10] の一覧を明示指定
 #   AIDOC_LIST_RETIRED=1 bash scripts/validate-ai-docs.sh      # [10] の WARN を一覧表示
+#   AIDOC_LIST_BT=1 / AIDOC_LIST_PH=1 / AIDOC_LIST_MBW=1 / AIDOC_LIST_MODEL=1  # [4b] / [5b] / [6w] / [3w] を一覧表示
+#
+#   [4b]・[5b]・[6w]・[3w] は既定では件数を1行にまとめて出す。`.aidocignore` は一覧表示の有無に
+#   かかわらず1指摘ずつ照合し、抑止した分を件数から除いて RESULT 行の ignored= に数える。
 #
 # 除外設定:
 #   リポジトリルートに `.aidocignore` を置くと、1行1パターン（BSD grep の基本正規表現）に
 #   マッチする指摘を抑止する。空行と `#` 始まりはコメント。
 #   意図的なプレースホルダ・意図的な多バイト名など、そのリポジトリで正しい状態にのみ使う。
 #
-# 終了コード: 0 = PASS, 1 = FAIL
-#   （`10` の単独実行のみ 2 = 未検査。廃止一覧が無い／読めないときに PASS と区別する）
+# 終了コード: 0 = PASS, 1 = FAIL, 2 = 未検査
+#   （2 は何も検査していないときに PASS と区別するための値。引数が不正なとき（未知の値・
+#    2つ以上）と、`10` の単独実行で廃止一覧が無い／読めないときに返す）
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
+
+# 冒頭コメントの「使い方」節と「終了コード」節をそのまま表示する（記述を二重に持たない）
+usage() {
+  sed -n '/^# 使い方:/,/^# 除外設定:/{/^# 除外設定:/!p;}' "${SCRIPT_PATH}" | sed 's/^# \{0,1\}//'
+  sed -n '/^# 終了コード:/,/^$/p' "${SCRIPT_PATH}" | sed 's/^# \{0,1\}//'
+}
+
+# 引数は「項目番号 1〜11 を1つ」か「なし」だけを受ける。
+# それ以外（例: 対象ディレクトリのつもりの `.`）を黙って受けると、どの項目にも一致せず
+# 何も検査しないまま PASS を返してしまうため、検査を始める前に止める（exit 2 = 未検査）。
+case "${1:-}" in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+if [ "$#" -gt 1 ]; then
+  echo "ERROR: 引数は項目番号を1つだけ指定できる（受け取った数: $#）。検査は実行していない" >&2
+  usage >&2
+  exit 2
+fi
+case "${1:-}" in
+  ''|1|2|3|4|5|6|7|8|9|10|11) ;;
+  *)
+    echo "ERROR: 未知の引数: '${1}'（項目番号 1〜11 を指定する。対象リポジトリは AIDOC_ROOT で渡す）。検査は実行していない" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
 # 既定は「スクリプトの1つ上」= 自リポジトリのルート。
 # AIDOC_ROOT を指定すると、任意のリポジトリを対象に検証できる（横断検証用）。
 if [ -n "${AIDOC_ROOT:-}" ]; then
@@ -78,6 +120,30 @@ is_ignored() {
 add_v() { if is_ignored "$1"; then IGNORED=$((IGNORED + 1)); else VIOLATIONS+=("$1"); fi; }
 add_w() { if is_ignored "$1"; then IGNORED=$((IGNORED + 1)); else WARNINGS+=("$1"); fi; }
 run_check() { [ -z "${ONLY}" ] || [ "${ONLY}" = "$1" ]; }
+
+# 件数を1行にまとめて出す WARN（[3w]・[4b]・[5b]・[6w]）の集計。
+#   $1 = 1行1指摘のファイル / $2 = 一覧表示するか（1 で一覧）/ $3 = まとめ行の書式（%s に件数）
+# `.aidocignore` は1指摘ずつ照合し、抑止した分は件数に入れず IGNORED に数える。
+# （まとめた1行だけを照合すると、抑止前の件数が WARN に出て ignored= が 0 のままになる）
+# まとめ行も add_w を通すので、まとめ行そのものに当てた既存の抑止パターンも従来どおり効く。
+add_w_bulk() {
+  local src="$1" list="$2" fmt="$3" kept="${1}.kept" line n
+  : > "$kept"
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    if is_ignored "$line"; then IGNORED=$((IGNORED + 1)); else printf '%s\n' "$line" >> "$kept"; fi
+  done < "$src"
+  n=$(wc -l < "$kept" | tr -d ' ')
+  if [ "$n" -gt 0 ]; then
+    if [ "$list" = "1" ]; then
+      while IFS= read -r line; do WARNINGS+=("$line"); done < "$kept"
+    else
+      # shellcheck disable=SC2059  # 書式はこのスクリプト内の固定文字列だけを渡す
+      add_w "$(printf "$fmt" "$n")"
+    fi
+  fi
+  rm -f "$kept"
+}
 
 echo "=== validate-ai-docs.sh :: ${ROOT_DIR} ==="
 
@@ -120,12 +186,27 @@ if run_check 3; then
       if [ -n "$fm_name" ] && [ "$fm_name" != "$base_name" ]; then
         echo "VIOLATION|[3b] name とファイル名の不一致: $f (name=$fm_name / file=$base_name)"
       fi
+      # [3w] model: が無い、または値が空（`model:`・`model: # inherit` のようにコメントだけ・
+      # `model: ""`・`model: ''`）。どれも YAML では値なしと同じで、環境既定 CLAUDE_CODE_SUBAGENT_MODEL の
+      # 段へ進むため、親継承でも `model: inherit` と書く（frontmatter-policy.md §2）。WARN 止まり。
+      # 値は「行頭の # 以降・空白に続く # 以降を捨て、前後の空白と対になった引用符を外す」で取り出す。
+      model_val="$(echo "$fm" | grep '^model:' | head -1 \
+        | sed -e 's/^model:[[:space:]]*//' -e 's/^#.*$//' -e 's/[[:space:]]#.*$//' \
+              -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\\(.*\\)'\$/\\1/" \
+              -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      [ -n "$model_val" ] || echo "WARNING|[3w] model: なし: $f"
     done > /tmp/aidoc_agents_$$.txt
+    : > /tmp/aidoc_agents_w_$$.txt
     while IFS= read -r line; do
       [ -z "$line" ] && continue
-      add_v "${line#VIOLATION|}"
+      case "$line" in
+        WARNING\|*) printf '%s\n' "${line#WARNING|}" >> /tmp/aidoc_agents_w_$$.txt ;;
+        *) add_v "${line#VIOLATION|}" ;;
+      esac
     done < /tmp/aidoc_agents_$$.txt
-    rm -f /tmp/aidoc_agents_$$.txt
+    add_w_bulk /tmp/aidoc_agents_w_$$.txt "${AIDOC_LIST_MODEL:-0}" \
+      "[3w] model: 行の無いエージェント定義 %s 件（親継承でも model: inherit と書く。AIDOC_LIST_MODEL=1 で一覧表示）"
+    rm -f /tmp/aidoc_agents_$$.txt /tmp/aidoc_agents_w_$$.txt
   fi
 fi
 
@@ -181,6 +262,8 @@ if run_check 4; then
   # Markdown リンクではないため [4] では拾えないが、スキル索引・関連スキル表はこの形式が多く、
   # 刈り込み後に大量の死に参照が残る主要な温床になる。
   # 汎用的な例示にも同じ書式が使われるため WARN 止まりとし、AIDOC_LIST_BT=1 で一覧表示する。
+  # 接頭辞に .workflows/ を含める（拠点の CLAUDE.md・スキルが `.workflows/*.md` を指したまま、
+  # 拠点に .workflows/ が無いと死に参照になるため。工程正本 development-flow.md 新設時に追加）。
   BT="/tmp/aidoc_bt_$$.txt"
   : > "$BT"
   while IFS= read -r f; do
@@ -188,24 +271,17 @@ if run_check 4; then
     awk '/^[ \t]*```/ { inblock = !inblock; next } !inblock { print }' "$f" 2>/dev/null \
       | grep -o '`[.a-zA-Z0-9_/-]*`' \
       | tr -d '`' \
-      | grep '^\(\.claude/\|\.agents/\|\.docs/\|templates/\|scripts/\|docs/\)' \
+      | grep '^\(\.claude/\|\.agents/\|\.docs/\|\.workflows/\|templates/\|scripts/\|docs/\)' \
       | grep '\.\(md\|sh\|py\|js\|ts\)$' \
       | while IFS= read -r p; do
           [ -e "$p" ] || echo "[4b] バッククォート参照が実在しない: ${f} -> ${p}"
         done >> "$BT"
   done < "$DOCS_LIST"
   if [ -s "$BT" ]; then
-    bt_count=$(sort -u "$BT" | wc -l | tr -d ' ')
-    if [ "${AIDOC_LIST_BT:-0}" = "1" ]; then
-      sort -u "$BT" > "${BT}.u"
-      while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        add_w "$line"
-      done < "${BT}.u"
-      rm -f "${BT}.u"
-    else
-      add_w "[4b] バッククォート表記の死に参照 ${bt_count} 件（AIDOC_LIST_BT=1 で一覧表示）"
-    fi
+    sort -u "$BT" > "${BT}.u"
+    add_w_bulk "${BT}.u" "${AIDOC_LIST_BT:-0}" \
+      "[4b] バッククォート表記の死に参照 %s 件（AIDOC_LIST_BT=1 で一覧表示）"
+    rm -f "${BT}.u"
   fi
   rm -f "$BT"
   rm -f "$DOCS_LIST" "$LINKS"
@@ -246,17 +322,8 @@ if run_check 5; then
     done >> /tmp/aidoc_ph2_$$.txt
   done
   if [ -f /tmp/aidoc_ph2_$$.txt ]; then
-    ph2_count=$(wc -l < /tmp/aidoc_ph2_$$.txt | tr -d ' ')
-    if [ "$ph2_count" -gt 0 ]; then
-      if [ "${AIDOC_LIST_PH:-0}" = "1" ]; then
-        while IFS= read -r line; do
-          [ -z "$line" ] && continue
-          add_w "$line"
-        done < /tmp/aidoc_ph2_$$.txt
-      else
-        add_w "[5b] .claude/skills|docs|rules 配下の未置換プレースホルダ ${ph2_count} 件（AIDOC_LIST_PH=1 で一覧表示）"
-      fi
-    fi
+    add_w_bulk /tmp/aidoc_ph2_$$.txt "${AIDOC_LIST_PH:-0}" \
+      "[5b] .claude/skills|docs|rules 配下の未置換プレースホルダ %s 件（AIDOC_LIST_PH=1 で一覧表示）"
     rm -f /tmp/aidoc_ph2_$$.txt
   fi
 fi
@@ -289,14 +356,9 @@ if run_check 6; then
     done >> /tmp/aidoc_mbw_$$.txt
   done
   if [ -f /tmp/aidoc_mbw_$$.txt ]; then
-    mbw_count=$(wc -l < /tmp/aidoc_mbw_$$.txt | tr -d ' ')
-    [ "$mbw_count" -gt 0 ] && add_w "[6w] .docs/ 配下の多バイトファイル名 ${mbw_count} 件（成果物のため既定では違反としない。詳細は AIDOC_LIST_MBW=1 で表示）"
-    if [ "${AIDOC_LIST_MBW:-0}" = "1" ]; then
-      while IFS= read -r line; do
-        [ -z "$line" ] && continue
-        add_w "$line"
-      done < /tmp/aidoc_mbw_$$.txt
-    fi
+    # 一覧表示時は他の項目と同じく個別行だけを出す（まとめ行と個別行を二重に数えない）
+    add_w_bulk /tmp/aidoc_mbw_$$.txt "${AIDOC_LIST_MBW:-0}" \
+      "[6w] .docs/ 配下の多バイトファイル名 %s 件（成果物のため既定では違反としない。詳細は AIDOC_LIST_MBW=1 で表示）"
     rm -f /tmp/aidoc_mbw_$$.txt
   fi
 fi
@@ -311,15 +373,18 @@ if run_check 7; then
   done
   while IFS= read -r f; do
     [ -e "$f" ] || continue
+    # 見出し行は区切り行の直前の行だけ。表でない行・コードフェンスで直前の列数を捨てる
+    # （捨てないと、見出しが空セルの表 `| | |` で前の別の表の列数を見出しとして比べてしまう）。
+    # 区切り行は `-` を1つ以上含む行に限る（`| | |` は空セルの見出し行であって区切り行ではない）。
     awk -v FNAME="$f" '
-      /^```/ { inblock = !inblock; next }
+      /^```/ { inblock = !inblock; hdr = 0; prev_n = 0; next }
       inblock { next }
       {
         line = $0
         gsub(/\\\|/, "", line)
-        if (line !~ /^[ \t]*\|/) { hdr = 0; next }
+        if (line !~ /^[ \t]*\|/) { hdr = 0; prev_n = 0; next }
         n = gsub(/\|/, "|", line)
-        if (line ~ /^[ \t]*\|[ \t:|-]+\|[ \t]*$/ && prev_n > 0) { hdr = 1; hdr_n = prev_n; next }
+        if (line ~ /^[ \t]*\|[ \t:|-]*-[ \t:|-]*\|[ \t]*$/ && prev_n > 0) { hdr = 1; hdr_n = prev_n; next }
         if (hdr == 1 && n != hdr_n) {
           printf "[7] テーブル列数不一致: %s:%d (見出し %d 列 / データ %d 列)\n", FNAME, NR, hdr_n, n
         }
@@ -346,9 +411,10 @@ if run_check 8; then
     grep -q '^## Version History' "$f" || continue
     fm_ver="$(sed -n '2,/^---$/p' "$f" | grep '^version:' | head -1 | sed 's/^version: *//' | tr -d '"'"'"' \r')"
     [ -n "$fm_ver" ] || continue
+    # 版のセルは太字（`| **v1.10.0** |`）も拾う（拾わないと太字の新しい版を見落とす）
     max_ver="$(sed -n '/^## Version History/,/^## /p' "$f" \
-      | grep -o '| *v\{0,1\}[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]* *|' \
-      | tr -d '| v' \
+      | grep -o '| *\(\*\*\)\{0,1\}v\{0,1\}[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\(\*\*\)\{0,1\} *|' \
+      | tr -d '| v*' \
       | sort -t. -k1,1n -k2,2n -k3,3n \
       | tail -1)"
     if [ -n "$max_ver" ] && [ "$fm_ver" != "$max_ver" ]; then
@@ -589,6 +655,62 @@ if run_check 10; then
       echo "RESULT[10]: FAIL (fail=${#R10_FAIL[@]})"
       exit 1
     fi
+  fi
+fi
+
+# ------------------------------------------------------------------
+# [11] 名指し表の名前の実在（WARN）
+# ------------------------------------------------------------------
+# CLAUDE.md の「## スキル参照」節に置く「作業 → Skill ツールで名指しするスキル」表の名前が、
+# 実体（.claude/skills/<name>/）を持つかを見る。表は毎ターン読まれる入口なので、
+# 実体の無い名前が残ると Skill ツールの名指しがそのまま失敗する。
+#
+# 設計上の約束（変更しないこと）:
+#   - WARN 級。[1]〜[9] の FAIL 基準は変えない。AIDOC_STRICT=1 のときだけ終了コードに効く。
+#   - 対象は CLAUDE.md と templates/CLAUDE.md（在るものだけ）。範囲は見出し「## スキル参照」から
+#     次の「## 」見出しまでで、コードフェンスの中は見ない。
+#   - 名前として拾うのは表の行（"|" 始まり）にあるバッククォート囲みの kebab-case だけ
+#     （パス・ファイル名・大文字を含む語は拾わない）。
+#   - 表が無い（節が無い・節に表が無い）リポジトリでも SKIP にせず、検査した結果 0 件として
+#     集計行を出す（拠点の CLAUDE.md には表が無いのが今の正しい状態）。
+if run_check 11; then
+  R11_SRC="/tmp/aidoc_r11_$$.txt"
+  : > "$R11_SRC"
+  for f in CLAUDE.md templates/CLAUDE.md; do
+    [ -f "$f" ] || continue
+    LC_ALL=C awk -v F="$f" '
+      /^[[:space:]]*```/ { fence = !fence; next }
+      fence { next }
+      /^## / { insec = ($0 ~ /^## スキル参照/); next }
+      insec && /^[|]/ {
+        rest = $0
+        while (match(rest, /`[a-z0-9][a-z0-9-]*`/)) {
+          printf "%s:%d\t%s\n", F, NR, substr(rest, RSTART + 1, RLENGTH - 2)
+          rest = substr(rest, RSTART + RLENGTH)
+        }
+      }
+    ' "$f" >> "$R11_SRC"
+  done
+  r11_files=$(cut -f1 "$R11_SRC" | cut -d: -f1 | sort -u | grep -c . | tr -d ' ')
+  r11_names=$(grep -c . "$R11_SRC" | tr -d ' ')
+  r11_warn=0
+  r11_ign=0
+  while IFS="$(printf '\t')" read -r r11_loc r11_name; do
+    [ -n "$r11_name" ] || continue
+    [ -d ".claude/skills/${r11_name}" ] && continue
+    r11_msg="[11] 名指し表のスキルが実在しない: ${r11_loc} -> ${r11_name}（.claude/skills/${r11_name}/ が無い）"
+    if is_ignored "$r11_msg"; then
+      IGNORED=$((IGNORED + 1)); r11_ign=$((r11_ign + 1))
+    else
+      WARNINGS+=("$r11_msg"); r11_warn=$((r11_warn + 1))
+    fi
+  done < "$R11_SRC"
+  rm -f "$R11_SRC"
+  echo ""
+  if [ "$r11_files" -eq 0 ]; then
+    echo "--- [11] 名指し表の名前の実在 (files=0, names=0, warn=0, ignored=${r11_ign}。名指し表なし) ---"
+  else
+    echo "--- [11] 名指し表の名前の実在 (files=${r11_files}, names=${r11_names}, warn=${r11_warn}, ignored=${r11_ign}) ---"
   fi
 fi
 

@@ -68,7 +68,7 @@ P0/P1 の修正後は、**再確認を修正差分に限定**し、本スキル�
 | API 単体（画面なし） | 関連エンドポイント群 + スキーマ/型 + 対象テスト |
 | バグ修正 | 該当バグの修正 + 回帰テスト |
 
-> PR レビュー・リリース前レビューなど、**レビュー自体が目的で呼ばれた場合は本節の対象外**（対象範囲はユーザー指定に従う）。
+> PR レビュー・リリース前レビューなど、**レビュー自体が目的で呼ばれた場合は本節の対象外**（対象範囲はユーザー指定に従う）。ただし再レビューの回数は正本の [「網羅レビューの回数上限」](../../docs/review-matrix.md#網羅レビューの回数上限) に従う。
 
 ---
 
@@ -111,11 +111,11 @@ Claude Code視点        Codex視点            Antigravity視点
 
 ## 🔴 横断ゲート: 本質ギャルレビュー（必須・全視点共通・Round 1 先頭）
 
-**3層構造（視点・観点・チェックリスト）に入る前の、前提・目的・意思決定を検証する事前フィルタである。** 3視点レビューへ分岐する前に、[essence-gyaru-review](../essence-gyaru-review/SKILL.md) を必ず1回実行すること。skip不可。
+**3層構造（視点・観点・チェックリスト）に入る前の、前提・目的・意思決定を検証する事前フィルタである。** 網羅レビューでは、3視点レビューへ分岐する前に、[essence-gyaru-review](../essence-gyaru-review/SKILL.md) を必ず1回実行すること。skip不可（差分レビューでは再実行しない。下記）。
 
 - Claude Code / Codex / Antigravity の3視点の**カウントに含めない独立枠**。目的・意思決定・前提・因果・矛盾・業務上の代償・次アクションの7軸で対象を突く
-- `review-iteration` は本レビューの周回番号（初回1、再レビューごとに加算）と揃える
-- **`code-review` を単体で再実行する場合の `review-iteration` 決定手順**: 同一対象への前回レビューがあれば「前回 `review-iteration` + 1」を使う。前回値は `.tmp/ai-review/gyaru/round-*/report.md` の最大番号等から確認する。前回が存在しない初回は 1 とする
+- `review-iteration` は網羅レビューの回数（初回1、網羅レビューごとに加算）とする。差分レビュー（正本「網羅レビューの回数上限」）では本質ギャルレビューを再実行せず、`review-iteration` も加算しない（impl-review-loop の差分限定の再確認と同じ扱い）。差分の回数は統合結果の「周回」欄に記す
+- **`code-review` を単体で再実行する場合の `review-iteration` 決定手順**: 同一対象への前回の網羅レビューがあれば「前回 `review-iteration` + 1」を使う。前回値は `.tmp/ai-review/gyaru/round-*/report.md` の最大番号等から確認する（網羅レビューでだけ作られるので、最大番号が網羅の回数になる）。差分の回数は前回の統合結果の「周回」欄から確認する。前回が存在しない初回は 1 とする
 - 出力先: `.tmp/ai-review/gyaru/round-{review-iteration}/report.md`
 - essence-gyaru-review の Instructions（Task で `essence-gyaru-reviewer` を起動 → `validate_report.py` で構造検証）に従う
 - 全指摘ID（`GYARU-{review-iteration}-{3桁}`）と件数を控え、Round 2（裁定）・Round 3（統合）・Round 4（fact-check）へそのまま引き渡す
