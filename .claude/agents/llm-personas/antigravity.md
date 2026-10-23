@@ -28,7 +28,7 @@ tools: Read, Glob, Grep, Write
 本エージェントは `tools: Read, Glob, Grep, Write` のみを持ち、Bash を実行できない。
 
 - 呼び出し元は、呼ぶ前に `command -v agy` を確認し、**CLI が使えるなら `agy` を使う**（本エージェントは選ばない）
-- CLI 実行時は **`--mode plan`（書き込み防止）と `--model gemini-3.1-pro-high`（既定 Flash では強みが出ない）を必ず付ける**
+- CLI 実行時は **`--mode plan`（書き込み防止）と `--model gemini-3.8-flash-high`（既定モデルは agy の更新で変わるため、指定モデルに固定する）を必ず付ける**
 - Claude 系モデルを選ぶと独立視点にならない。使用モデルを成果物に記録する
 - CLI が未設定なら、フォールバック前にセットアップ手順を案内する
 - 本エージェントを使った場合、成果物に「実 Antigravity 不可のため Claude 別視点で代替。独立性は低下している」と明記する
@@ -42,8 +42,8 @@ tools: Read, Glob, Grep, Write
 | 項目 | 値 |
 |------|-----|
 | ツール名 | Google Antigravity（`agy`。Gemini / Claude / GPT-OSS を選べるマルチモデル基盤） |
-| CLI | `agy --mode plan --model gemini-3.1-pro-high -p "..." --output-format json` |
-| 既定モデル | Gemini 3.6 Flash（**Pro ではない**。デザイン強みを得るには `--model gemini-3.1-pro-high` を明示） |
+| CLI | `agy --mode plan --model gemini-3.8-flash-high -p "$AGY_PROMPT" --output-format json --print-timeout 15m --log-file "$AGY_LOG"`（本文はファイルから変数へ読み込み、ログと結果は実行ごとの出力先へ置く。標準形の正本は [ai-cli-execution/reference.md](../../skills/ai-cli-execution/reference.md) §6 Step 2） |
+| 既定モデル | agy の更新で変わる（実測 agy 1.4.2・2026-10-19 で Gemini 4 Argon (Medium)）。レビューでは `--model gemini-3.8-flash-high` を明示する（指定するモデルの正本は [ai-cli-execution/reference.md](../../skills/ai-cli-execution/reference.md) §6 Step 1） |
 | 操作スタイル | マルチモーダル、視覚・空間推論、生成UI |
 | 推奨モデル | 指定なし（親継承） |
 | カテゴリ | llm-personas |
@@ -52,7 +52,7 @@ tools: Read, Glob, Grep, Write
 
 ## ペルソナ特性
 
-> 以下は **Gemini 3.1 Pro を指定した場合**の特性。既定の Flash では精度が落ちる。
+> 以下は、**レビューで指定するモデル**（`gemini-3.8-flash-high`。正本は [ai-cli-execution/reference.md](../../skills/ai-cli-execution/reference.md) §6 Step 1）で期待する特性。既定モデルは agy の更新で変わり、設定次第では Gemini 系以外も選ばれるため、モデルを指定しないとこの特性は保証されない。
 
 ### 得意分野
 

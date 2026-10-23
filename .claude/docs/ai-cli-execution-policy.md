@@ -23,7 +23,7 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 |--------|-----|------|
 | **Claude Code** | `claude -p`（オーケストレーター本体からのネスト起動。別プロセスとして独立実行） | 大コンテキスト推論、プロジェクト固有規約の理解、Agent Teams 並列実行 |
 | **Codex**（GPT-6 系） | `codex exec` | 実行・デバッグ・長期タスクの持続性。指摘が具体的で実行可能。ゴールへの執着が強く、中途半端な結論で止まらない |
-| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-3.1-pro-high` | **Gemini 3.1 Pro 指定時**、視覚・空間推論とデザインで主要マルチモーダルベンチマーク首位級。2D UI/UX とグラフィカルプログラミングの理解が native |
+| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-3.8-flash-high` | **Gemini 3 系指定時**、視覚・空間推論とデザインで主要マルチモーダルベンチマーク首位級。2D UI/UX とグラフィカルプログラミングの理解が native |
 
 ### 観点の割り当て指針
 
@@ -35,7 +35,7 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 
 > 根拠: Codex は Artificial Analysis Coding Agent Index で Codex harness 首位、長期実行・ツール使用・エージェント制御が native。Gemini 3 系は視覚・空間推論ベンチマークとウェブサイトデザイン評価で首位。
 >
-> ⚠️ **`agy` は Gemini 専用ではない**（Claude・GPT-OSS も選べる）。既定は Flash 系（実測 agy 1.2.x で Gemini 3.8 Flash）のため、上記の強みを得るには `--model` の明示が必須。詳細は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md) §6。
+> ⚠️ **`agy` は Gemini 専用ではない**（Claude・GPT-OSS も選べる）。既定モデルは agy の更新で変わる（実測 agy 1.4.2・2026-10-19 で Gemini 4 Argon (Medium)）ため、`--model` で指定モデルに固定することが必須。詳細は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md) §6。
 
 ---
 
@@ -66,6 +66,8 @@ Claude の独立 CLI は要求モデルを引数で明示し、親内サブエ�
 ---
 
 ## Claude Code MCP経路とcommit検査
+
+本節は commit 検査 hook（PreToolUse の pre-commit-check）を導入した場合の構成（`.claude/settings.json` の PreToolUse 登録と commit 検査）の説明である。hook の導入は任意（2026-10-19 オーナー判断）で、本体リポジトリは登録していない。導入している拠点では、その拠点の `.claude/settings.json` と hook スクリプトを正とし、ここに書いた matcher・内部 deadline・証跡契約がそのまま当たるとは限らない。
 
 `claude mcp serve` はClaude Codeのツールを公開するサーバーであり、レビュー用の独立Claude実行を置き換えるTier 2ではない。個々の呼出確認はクライアント側の責任になる。[公式MCP仕様](https://code.claude.com/docs/en/mcp#use-claude-code-as-an-mcp-server)
 

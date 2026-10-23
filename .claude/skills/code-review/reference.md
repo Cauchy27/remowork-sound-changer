@@ -4,7 +4,7 @@
 
 | # | セクション | 内容 |
 |---|-----------|------|
-| 1 | [3視点の起動コマンド全文](#1-3視点の起動コマンド全文) | 共通プロンプト雛形・Claude Code/Codex/Antigravity の Step0（疎通確認）/Step1（レビュー実行）・Tier 3 フォールバック |
+| 1 | [3視点の起動コマンド全文](#1-3視点の起動コマンド全文) | 共通プロンプト雛形・準備（実行ごとの出力先とプロンプトファイル）・Claude Code/Codex/Antigravity の Step0（疎通確認）/Step1（レビュー実行）・Tier 3 フォールバック |
 | 2 | [第3層チェックリストの詳細対応表](#2-第3層チェックリストの詳細対応表) | 13項目→正本の観点9つの対応表、Business Logic 項目の特記、ceo-reviewer/cmo-advisor 追加起動テンプレート |
 | 3 | [統合レビュー結果テンプレート](#3-統合レビュー結果テンプレート) | Round 3 で出力する最終成果物のフォーマット全文 |
 
@@ -30,11 +30,22 @@
 【出力形式】テーブル
 ```
 
-**Antigravity（`agy`）実行時のみ、【対象ファイル】をパスのまま渡さず、内容を `cat` で取得してプロンプトへ直接埋め込むこと。** headless 実行はファイル読み取りが auto-deny されうるため、パスだけでは空出力になる（詳細は下記「Antigravity 視点」節）。
+**Antigravity（`agy`）実行時のみ、【対象ファイル】【チェックリスト】をパスのまま渡さず、対象ファイルの内容・チェックリストの本文・【共通前提】の原文（review-matrix.md）をシェルで取得してプロンプトへ埋め込むこと。** headless 実行はファイル読み取りが auto-deny されうるため、パスだけでは空出力になるか、読めないまま判定される（詳細は下記「Antigravity 視点」節）。
 
 **Codex実行時のみ**、ゴール文の直後に [codex-prompt-guideline.md](../../docs/codex-prompt-guideline.md) の【モデル運用】【スコープ】を全文展開し、送信本文で確認する。CLIは下記の組立・grep手順、非Bash経路は同ガイドラインの文字列展開手順を使う。Claude Code / Antigravity向けには挿入しない。
 
-3視点とも、下記の Step 0（疎通確認）→ Step 1（レビュー実行、上記プロンプト雛形を埋めて使用）の順で直接実行できる。
+3視点とも、下記の Step 0（疎通確認）→ 準備 → Step 1（レビュー実行、上記プロンプト雛形を埋めて使用）の順で直接実行できる。
+
+### 準備: 実行ごとの出力先とプロンプトファイル
+
+Step 1 の前に、実行ごとの出力先ディレクトリを作る。結果・ログ・プロンプトを固定の名前で置くと、並列の実行や同じ checkout の別セッションの結果で上書きされ、EXIT と非空の確認では見抜けない（[ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §3）。
+
+```bash
+mkdir -p .tmp/ai-review && REVIEW_DIR=$(mktemp -d .tmp/ai-review/run.XXXXXX) || exit 1   # 実行ごとに一意の出力先
+echo "REVIEW_DIR=$REVIEW_DIR"
+```
+
+表示された `REVIEW_DIR` を各視点の Step 1 の先頭に入れる。上記プロンプト雛形を埋めた本文は `$REVIEW_DIR/prompt.md` にファイルとして書き（Write ツール等）、Claude Code と Antigravity はそこから変数へ読み込んで渡す。本文をシェルの二重引用符の中へ直接書くと、バッククォートや `$` がシェルに展開され、送信前に消えるか実行される。Codex は下記の組立手順で本文を別に作る（クォート付きヒアドキュメントなので展開されない）。
 
 ### Claude Code 視点（`claude -p`）
 
@@ -55,14 +66,18 @@ claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "
 要求モデル・実行モデル・根拠・起動経路を成果物へ記録する。実行モデルが確認できない場合は未確認とする。選定と権限制限の正本は [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §4.5。
 
 ```bash
+REVIEW_DIR="{準備で表示された REVIEW_DIR}"
 : "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
-claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text "{上記の共通プロンプトを埋めたもの}" > .tmp/ai-review/claude-review.md 2> .tmp/ai-review/claude-review.log
+REVIEW_PROMPT=$(cat "$REVIEW_DIR/prompt.md") || exit 1   # 共通プロンプト雛形を埋めた本文
+claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text "$REVIEW_PROMPT" \
+  < /dev/null > "$REVIEW_DIR/claude-review.md" 2> "$REVIEW_DIR/claude-review.log"
 echo "EXIT=$?"
 ```
 
 | 要素 | 理由 |
 |------|------|
 | `--allowedTools "Read,Grep,Glob"` | レビューは読み取りのみ。**`--tools`（利用可能ツールの選択）と `--allowedTools`（許可リスト）は両方実在するが意味が異なる。** 読み取り専用レビューは Edit/Write/Bash を許可リストに含めない `--allowedTools` が正しい |
+| `< /dev/null` | 付けないと stdin を待って止まる（[ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §4.5 Step 2） |
 | 標準出力/標準エラーを分離 | 途中経過（stderr）と最終結果（stdout）を混ぜない |
 | 結果を読む前に | **EXIT・ファイル存在・非空** の3点を確認する（Codex/Antigravity と同じ作法） |
 
@@ -70,11 +85,12 @@ echo "EXIT=$?"
 
 #### Step 0: 疎通確認
 
-下記Step 1の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/codex-probe.md` / `codex-probe.log` に替えて疎通を確認する。正本ブロックは維持する。
+下記Step 1の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/codex-probe.md` / `codex-probe.log`、プロンプトファイルを `.tmp/ai-review/codex-probe-prompt.txt` に替えて疎通を確認する。疎通確認は準備より前に行うため、先頭の `REVIEW_DIR` の行は使わない。正本ブロックは維持する。
 
 #### Step 1: レビュー実行
 
 ```bash
+REVIEW_DIR="{準備で表示された REVIEW_DIR}"
 codex_guard_blocks=$(awk '
 $0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
 $0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
@@ -83,7 +99,7 @@ $0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
 step == 1 || step == 3 { print }
 END { if (step != 4) exit 1 }
 ' .claude/docs/codex-prompt-guideline.md) || exit 1
-codex_prompt_file=".tmp/ai-review/codex-prompt.txt"
+codex_prompt_file="$REVIEW_DIR/codex-prompt.txt"
 {
   cat <<'CODEX_GOAL'
 ゴールは {対象} を観点 {観点番号・名称} でレビューし、優先度付きの指摘を返すこと。
@@ -106,8 +122,8 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
-  -o ".tmp/ai-review/codex-review.md" - < "$codex_prompt_file" > ".tmp/ai-review/codex-review.log" 2>&1
+codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
+  -o "$REVIEW_DIR/codex-review.md" - < "$codex_prompt_file" > "$REVIEW_DIR/codex-review.log" 2>&1
 echo "EXIT=$?"
 ```
 
@@ -115,7 +131,7 @@ echo "EXIT=$?"
 
 ### Antigravity 視点（`agy`）
 
-**下記コマンド中のモデル名（`gemini-3.1-pro-high`）は例示。** モデル名は変わりうるため、最新の推奨モデルは [`ai-cli-execution` スキルの reference.md](../ai-cli-execution/reference.md) §6 Step 1 を正本とする。モデル改廃時はそちらのみ更新すればよく、本ファイルの追随は不要。
+**下記コマンド中のモデル名（`gemini-3.8-flash-high`）は例示。** モデル名は変わりうるため、最新の推奨モデルは [`ai-cli-execution` スキルの reference.md](../ai-cli-execution/reference.md) §6 Step 1 を正本とする。モデル改廃時はそちらのみ更新すればよく、本ファイルの追随は不要。
 
 #### Step 0: 疎通確認
 
@@ -123,27 +139,46 @@ echo "EXIT=$?"
 agy -p "ゴールは PONG とだけ返すこと。" --output-format text > .tmp/ai-review/agy-probe.md 2> .tmp/ai-review/agy-probe.log; echo "EXIT=$?"
 ```
 
-#### Step 1: レビュー実行（対象ファイルの内容を埋め込む。パスだけを渡すと読めず空出力になる）
+#### Step 1: レビュー実行（対象ファイル・チェックリスト・共通前提を埋め込む。パスだけを渡すと読めない）
 
-**headless（`-p`）実行はファイル読み取り等のツール呼び出しが auto-deny されうる。** `agy` に対象ファイルを読ませようとせず、呼び出し側（シェル）が `cat` で内容を先に取得し、プロンプト文字列へ直接埋め込む（`internal-structure-review` スキルの Antigravity 起動と同じ方式。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6「headless の権限モデル」）。
+**headless（`-p`）実行はファイル読み取り等のツール呼び出しが auto-deny されうる。** `agy` にファイルを読ませようとせず、呼び出し側（シェル）が内容を先に取得し、プロンプトへ直接埋め込む（`internal-structure-review` スキル Step 2 の Antigravity 例と同じ方式。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6「headless の権限モデル」）。埋め込むのは、共通プロンプト雛形を埋めた本文（`$REVIEW_DIR/prompt.md`）、【共通前提】の原文（review-matrix.md「全レビュースキル共通の前提」）、【チェックリスト】の本文（`agents/code-checklist-13.md` 全文。Claude Code・Codex がファイルから読むものと同じで、Business Logic の品質ゲートを含む）、対象ファイルの内容（ファイル名と行番号付き）の4つ。どれかの読み込みが失敗するか、共通前提の抜き出しが空なら、送信前に止まる。
 
 ```bash
-AGY_TARGET=$(cat {対象ファイルを列挙。複数ファイルは cat file1 file2 ... で連結})
-agy --mode plan --model gemini-3.1-pro-high -p \
-  "{上記の共通プロンプトを埋めたもの}
+REVIEW_DIR="{準備で表示された REVIEW_DIR}"
+AGY_PROMPT=$(cat "$REVIEW_DIR/prompt.md") || exit 1   # 共通プロンプト雛形を埋めた本文
+AGY_CHECKLIST=$(cat .claude/skills/code-review/agents/code-checklist-13.md) || exit 1
+AGY_TARGET=$(awk 'FNR == 1 { print "### " FILENAME } { print FNR ": " $0 }' {対象ファイルを空白区切りで列挙}) || exit 1
+REVIEW_PREMISES=$(awk '
+/^## 全レビュースキル共通の前提$/ { active=1; next }
+active && /^## / { exit }
+active { print }
+' .claude/docs/review-matrix.md) && [ -n "$REVIEW_PREMISES" ] || exit 1   # 見出しが見つからず空なら止める
+AGY_LOG=$(mktemp "$REVIEW_DIR/agy-review.agy-cli.XXXXXX") || exit 1   # 実行ごとに一意のログのパス
+agy --mode plan --model gemini-3.8-flash-high -p \
+  "${AGY_PROMPT}
 
-## 対象ファイルの内容（ツール呼び出しは行わず、ここに埋め込まれた内容だけで判定すること）
+上記の【共通前提】【チェックリスト】【対象ファイル】は、以下に埋め込んだ原文・本文・内容を使う。ツール呼び出しは行わず、ここに埋め込まれた内容だけで判定すること（【制約】の「ファイルを実際に読んでから判定する」は、埋め込んだ内容を読むことを指す）。出力は【出力形式】【完了条件】に従う。
+
+## 共通前提（review-matrix.md）
+${REVIEW_PREMISES}
+
+## チェックリスト（code-checklist-13.md）
+${AGY_CHECKLIST}
+
+## 対象ファイルの内容（各行の先頭は行番号）
 ${AGY_TARGET}
 " \
-  --output-format text --print-timeout 15m > .tmp/ai-review/agy-review.md 2> .tmp/ai-review/agy-review.log; echo "EXIT=$?"
+  --output-format text --print-timeout 15m --log-file "$AGY_LOG" \
+  > "$REVIEW_DIR/agy-review.md" 2> "$REVIEW_DIR/agy-review.log"
+echo "EXIT=$?"; echo "AGY_LOG=$AGY_LOG"
 ```
 
-`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--model gemini-3.1-pro-high` を省略すると既定の Flash になり独立視点が薄まる。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` は手順・対象内容を埋め込んだ分プロンプトが長くなるため指定する（既定5分では打ち切られることがある）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
+`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--model gemini-3.8-flash-high` を省略すると agy の既定モデル（更新で変わる）で実行され、独立視点が薄まる。`--log-file` は実行モデルを確かめる専用ログで、パスは実行ごとに `mktemp` で一意に作る。表示された `AGY_LOG` が [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6 Step 1 の条件を満たさなければ、実行モデルは「未確認」と記録する。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` はチェックリスト・共通前提・対象内容を埋め込んだ分プロンプトが長くなるため指定する（既定5分では打ち切られることがある）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
 
 本スキル固有の点のみ以下に記す（手順詳細は上記コードブロックと ai-cli-execution 参照）。
 
-- 出力先は本スキル共通で `.tmp/ai-review/` 配下に統一する
-- プロンプトの【チェックリスト】欄には `agents/code-checklist-13.md` を指定する（同ファイル末尾の「Codex プロンプトテンプレート」に Go/Next 別のひな形がある）
+- 出力先は `.tmp/ai-review/` 配下に、実行ごとに `mktemp -d` で作ったディレクトリ（`REVIEW_DIR`）とする。3視点の結果・ログ・プロンプトと agy の専用ログをそこへまとめる
+- プロンプトの【チェックリスト】欄には `agents/code-checklist-13.md` を指定する（同ファイル末尾の「Codex プロンプトテンプレート」に Go/Next 別のひな形がある）。Antigravity にはパスではなく本文を埋め込む（上記 Step 1）
 - **Antigravity はコード実装レビューでも Codex と同格の必須試行**（正本の「対象別の視点・観点セット」で、コード実装は3視点とも使う対象に指定されているため）。デザイン/UI/UX を含まないバックエンドのみの変更でも試行し、利用不可の場合のみ独立性低下を明記して Tier 3 へ落とす
 
 ### Tier 3: Task tool + ペルソナ（最終手段）
@@ -234,7 +269,7 @@ Task(subagent_type="cmo-advisor", description="マーケティング視点レビ
 **実行経路**: {全視点 Tier 1 / 一部 Tier 3 など}
 **使用観点**: 1 要件充足 / 2 アーキテクチャ / 3 実装品質 / 4 セキュリティ / 7 運用保守（該当時 6・9 も記載）
 **対象版・正本**: {対象SHA/差分識別、仕様・決定記録}
-**周回**: 網羅 n/3・差分 k 回目（`review-iteration` = n。差分レビューの場合は見た範囲）
+**周回**: 網羅 n/3（実装の途中で呼ばれた場合は「網羅 n/1」。差分レビューの回は「・差分 k 回目」と見た範囲を足す。数え直すまでは `review-iteration` = n で、数え直した後は `review-iteration` を併記する）
 **未確認事項・人間判断待ち**: {未検査の範囲、仕様解釈・代償・承認待ち}
 
 ## 不変条件と検証記録

@@ -20,7 +20,7 @@ Claude Code のオーケストレーター（親セッション）から、**3�
 ## 1. 対象ツールと担当領域（要約）
 
 ツールの一般的な強み・CLI 起動コマンドの正本は [ai-cli-execution-policy.md](../../docs/ai-cli-execution-policy.md) §1。
-Claude Code（`claude -p`）は大コンテキスト推論・プロジェクト固有規約の理解・Agent Teams 並列実行、Codex（`codex exec`）は実行・デバッグ・長期タスクの持続性、Antigravity（`agy --model gemini-3.1-pro-high`）は視覚・空間推論とデザインを一般的な強みとする。
+Claude Code（`claude -p`）は大コンテキスト推論・プロジェクト固有規約の理解・Agent Teams 並列実行、Codex（`codex exec`）は実行・デバッグ・長期タスクの持続性、Antigravity（`agy --model gemini-3.8-flash-high`）は視覚・空間推論とデザインを一般的な強みとする。
 **レビュー文脈での観点割り当て（誰が観点1〜9のどれを主担当するか）の正本は [review-matrix.md](../../docs/review-matrix.md)「第1層: 視点」の交差表。** `ai-cli-execution-policy.md` §1 は観点番号による割り当てを再掲しない（住み分けは review-matrix.md「本ファイルと ai-cli-execution-policy.md の住み分け」節）。
 
 ---
@@ -42,6 +42,16 @@ mkdir -p .tmp/ai-review && git check-ignore -q .tmp/ai-review && echo "IGNORED_O
 ```
 
 `IGNORED_OK` が出ない場合は Git 管理外の一時ディレクトリ（`mktemp -d`）を使う。
+
+**結果・ログ・プロンプトのファイルは、実行ごとに `mktemp -d` で作るディレクトリ（`REVIEW_DIR`）へ置く。** 同じパスへ出力すると、並列の実行や同じ checkout の別セッションの結果で上書きされ、`EXIT` と出力の非空の確認では見抜けない（§6 Step 1 の専用ログと同じ理由）。本書の各節の標準形（§4.5・§5・§6 の Step 2、§5 Step 3）と、複数の視点を並列に起動するレビューの例（code-review の reference.md §1「準備」、internal-structure-review Step 2）は、どれもこの `REVIEW_DIR` の中へ出力する。各例は別の Bash 呼び出しで実行するため、下で表示された値を各例の先頭の `REVIEW_DIR="{…}"` に入れる。
+
+```bash
+REVIEW_DIR=$(mktemp -d .tmp/ai-review/run.XXXXXX) || exit 1; echo "REVIEW_DIR=$REVIEW_DIR"   # IGNORED_OK が出なかったときは REVIEW_DIR=$(mktemp -d)（Git 管理外）
+```
+
+疎通確認（§4.5 Step 3・§5 Step 1・§6 Step 3）の出力は、結果をレビューに使わないため `.tmp/ai-review/` 直下の固定名のままにしている。別の実行と重なって取り違えうるので、疎通 NG と読んだときは、認証切れ（§4。Claude Code の OAuth 失効を含む）に当たらない限り、Tier を下げる前に疎通確認だけを1回やり直す。認証切れに当たる場合はやり直さず、§4 の案内とフォールバックに従う（OAuth 失効で再試行を繰り返すのは §9 の禁止事項）。疎通 OK と取り違えた場合は、続く本実行の `EXIT` と非空の確認で失敗が表に出る。
+
+**プロンプト本文はシェルの二重引用符の中へ直接書かない。** バッククォートや `$` がシェルに展開され、送信前に消えるか実行される。本文はファイルに書き（Write ツール等）、変数へ読み込んで `"$変数"` として渡す（変数の値は再展開されない）。Codex の標準形（§5 Step 2）はクォート付きヒアドキュメントで組み立てるため展開されない。
 
 ---
 
@@ -165,10 +175,12 @@ command -v claude && claude --version
 要求モデルはユーザー指定とレビューの要件から決め、利用可能な識別子を確認して `CLAUDE_REVIEW_MODEL` に設定する。独立 CLI の指定省略を「親継承」と扱わない。成果物には要求モデル・実行モデル・確認根拠・起動経路を [独立性の申告](../../docs/review-matrix.md) に従って記録する。実行モデルの証拠が取れない場合は「未確認」とし、CLI のバージョンやモデル自身の自己申告で代用しない。
 
 ```bash
+REVIEW_DIR="{§3 で表示された REVIEW_DIR}"
 : "${CLAUDE_REVIEW_MODEL:?要求モデルの識別子を設定する}"
+CLAUDE_PROMPT=$(cat "$REVIEW_DIR/{名前}-prompt.md") || exit 1   # 4要素プロンプト。本文は二重引用符の中へ直接書かない（§3）
 claude -p --model "$CLAUDE_REVIEW_MODEL" --permission-mode plan --allowedTools "Read,Grep,Glob" --output-format text \
-  "{4要素プロンプト}" \
-  < /dev/null > .tmp/ai-review/{名前}.md 2> .tmp/ai-review/{名前}.log
+  "$CLAUDE_PROMPT" \
+  < /dev/null > "$REVIEW_DIR/{名前}.md" 2> "$REVIEW_DIR/{名前}.log"
 echo "EXIT=$?"
 ```
 
@@ -177,6 +189,8 @@ echo "EXIT=$?"
 | `--permission-mode plan` | 通常設定で書き込みを制限するレビュー用の開始モード。bypassへ切替可能なセッション等を含む全条件での書込不可を保証しない |
 | `--allowedTools "Read,Grep,Glob"` | 読み取り系ツールのみ確認なしで許可する（Step 1 参照） |
 | `--model` | 要求モデルを明示する。モデル名を固定せず、実行モデルは別途確認・記録する |
+| `"$CLAUDE_PROMPT"` | 本文はファイルから変数へ読み込んで渡す。二重引用符の中へ直接書くと、バッククォートや `$` が展開される（§3） |
+| `REVIEW_DIR` | 実行ごとの出力先（§3）。結果・ログ・プロンプトを別の実行と共有しない |
 | `< /dev/null` | 付けないと stdin を待って停止する |
 | `> {ファイル} 2> {ログ}` | 応答とエラーログを分離して回収する |
 | `echo "EXIT=$?"` | 成否判定。出力ファイルの存在・非空とあわせて確認する |
@@ -223,15 +237,16 @@ command -v codex && codex --version
 
 ### Step 1: 疎通確認
 
-Step 2の組立・grep・送信手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log` に替えて1回実行する。疎通確認でも正本ブロックを省略しない。
+Step 2の組立・grep・送信手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log`、プロンプトファイルを `.tmp/ai-review/probe-prompt.txt` に替えて1回実行する（疎通確認の出力は固定名。先頭の `REVIEW_DIR` の行は使わない。§3）。疎通確認でも正本ブロックを省略しない。
 
 `EXIT=0` かつ出力ファイルに `PONG` → 疎通OK。失敗時は `probe.log` に理由が残る。
 
 ### Step 2: 観点付きレビュー（標準形）
 
-出力先ディレクトリを先に用意する。ゴール・タスク本文・出力先を依頼に合わせて埋める。
+実行ごとの出力先（§3 の `REVIEW_DIR`）を先に用意する。ゴール・タスク本文・出力先の名前を依頼に合わせて埋める。
 
 ```bash
+REVIEW_DIR="{§3 で表示された REVIEW_DIR}"
 codex_guard_blocks=$(awk '
 $0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
 $0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
@@ -240,7 +255,7 @@ $0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
 step == 1 || step == 3 { print }
 END { if (step != 4) exit 1 }
 ' .claude/docs/codex-prompt-guideline.md) || exit 1
-codex_prompt_file=".tmp/ai-review/{名前}-prompt.txt"
+codex_prompt_file="$REVIEW_DIR/{名前}-prompt.txt"
 {
   cat <<'CODEX_GOAL'
 ゴールは {対象ファイル} を {観点} でレビューし、根拠付きの指摘を0〜5件返すこと。
@@ -258,8 +273,8 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
-  -o ".tmp/ai-review/{名前}.md" - < "$codex_prompt_file" > ".tmp/ai-review/{名前}.log" 2>&1
+codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
+  -o "$REVIEW_DIR/{名前}.md" - < "$codex_prompt_file" > "$REVIEW_DIR/{名前}.log" 2>&1
 echo "EXIT=$?"
 ```
 
@@ -275,9 +290,10 @@ echo "EXIT=$?"
 ### Step 3: ネイティブ差分レビュー
 
 ```bash
-codex exec -s read-only review -o .tmp/ai-review/diff-review.md --base main < /dev/null > .tmp/ai-review/diff-review.log 2>&1; echo "EXIT=$?"
-codex exec -s read-only review -o .tmp/ai-review/diff-review.md --uncommitted < /dev/null > .tmp/ai-review/diff-review.log 2>&1; echo "EXIT=$?"
-codex exec -s read-only review -o .tmp/ai-review/diff-review.md --commit {SHA} < /dev/null > .tmp/ai-review/diff-review.log 2>&1; echo "EXIT=$?"
+REVIEW_DIR="{§3 で表示された REVIEW_DIR}"
+codex exec -s read-only review -o "$REVIEW_DIR/diff-review.md" --base main < /dev/null > "$REVIEW_DIR/diff-review.log" 2>&1; echo "EXIT=$?"
+codex exec -s read-only review -o "$REVIEW_DIR/diff-review.md" --uncommitted < /dev/null > "$REVIEW_DIR/diff-review.log" 2>&1; echo "EXIT=$?"
+codex exec -s read-only review -o "$REVIEW_DIR/diff-review.md" --commit {SHA} < /dev/null > "$REVIEW_DIR/diff-review.log" 2>&1; echo "EXIT=$?"
 ```
 
 > ⚠️ **`review` は対象指定オプションと位置引数プロンプトを併用できない。** 実測で `exit 2` になる。
@@ -311,51 +327,62 @@ command -v agy && agy --version
 ### 🔴 Step 1: モデルを必ず明示する
 
 **`agy` は Gemini 専用ではない。複数モデルを切り替えられる実行基盤である。**
-実測（agy 1.2.5、2026-09-18）の `agy models` 出力（ID のみ抜粋。表示名は `agy models` を正本とする）:
+実測（agy 1.4.2、2026-10-19）の `agy models` 出力（ID のみ抜粋。表示名は `agy models` を正本とする）:
 
 ```
+gemini-4-argon-high / -medium / -low
 gemini-3.8-flash-high / -medium / -low
-gemini-3.7-flash-high / -medium / -low
-gemini-3.6-flash-high / -medium / -low
-gemini-3.1-pro-high / -low
-claude-sonnet-4-6
-claude-opus-4-6-thinking
+claude-opus-5-5-high / -medium / -low
+claude-sonnet-5-5-high / -medium / -low
 gpt-oss-120b-medium
 ```
 
-一覧は agy の更新で頻繁に変わる（1.1.8 → 1.2.5 で `gemini-3.5-flash-*` が消え、3.7 / 3.8 Flash が増えた）。使う前に `agy models` で確認する。
+一覧は agy の更新で頻繁に変わる（1.1.8 → 1.2.5 で `gemini-3.5-flash-*` が消え、3.7 / 3.8 Flash が増えた。1.2.5 → 1.4.2 で `gemini-3.1-pro-*`・3.6 / 3.7 Flash が消え、`gemini-4-argon-*` が増えた）。使う前に `agy models` で確認する。
 
-**既定は Flash 系で、実測（agy 1.2.x、2026-09）では `Gemini 3.8 Flash (High)`**（Pro ではない）。モデルを指定しないと、
-§1 で期待した「視覚・空間推論とデザインの強み」は得られず、設定次第では Claude が選ばれて
+**レビューで指定するモデルは `gemini-3.8-flash-high`**（2026-10-19 決定。Gemini は 3.8 系を使う）。**既定モデルは agy の更新で変わる**（実測: agy 1.2.x・2026-09 は `Gemini 3.8 Flash (High)`、agy 1.4.2・2026-10-19 は `Gemini 4 Argon (Medium)`）。モデルを指定しないと、
+レビューごとに実行モデルが変わって結果を比べられず、設定次第では Claude が選ばれて
 **独立視点そのものが失われる**。
 
 | 用途 | 指定するモデル |
 |------|---------------|
-| デザイン・UX・空間把握のレビュー | `--model gemini-3.1-pro-high` |
-| 軽量な確認・疎通 | 既定（Flash）で可 |
+| レビュー（観点を問わない。デザイン・UX のほか internal-structure-review・code-review の視点を含む） | `--model gemini-3.8-flash-high` |
+| 疎通確認だけ（結果をレビューに使わない） | 既定で可 |
 
 **Claude 系モデルを選んだ場合は「独立視点」にならない。** 成果物には実際に使ったモデル名を必ず記録する。
-実際に使ったモデルは、実行後に `~/.gemini/antigravity-cli/log/cli-*.log` のうち **`Print mode: starting` を含む最新のログ**で `label="…"` を確かめる。
-単純に最新のログを取ると、`-p` 実行後に起動した `agy models` 等（print mode でない）のログを拾い、既定の Flash の label を実モデルと誤認する。ログが1件も無い場合は「ログなし」と出して終わる:
+実際に使ったモデルは、**実行ごとに `--log-file` で専用のログファイルを指定し**（Step 2 の標準形に含める）、そのログの `label="…"` で確かめる。
+既定のログ（`~/.gemini/antigravity-cli/log/cli-{起動時刻}.log`）からは探さない。ファイル名が秒単位の起動時刻なので、同じ秒に起動した並列実行は1つのファイルへ書き込み、内容が上書き・交錯する。別セッションの `agy -p` や、後から起動した `agy models` 等のログとも見分けられない（実測 2026-10-19・agy 1.4.2: 7本を並列実行して print-mode のログが1件しか残らず、各実行とログを対応付けられなかった）。
+
+`--log-file` の実測（同日・agy 1.4.2）: 指定すると既定のログは作られない。並列2本でも各ログに `Print mode: starting` が1件ずつ入り、`label` は実行ごとに分かれた（`--model gemini-3.8-flash-high` は `Gemini 3.8 Flash (High)`、指定なしは `Gemini 4 Argon (Medium)`）。`--output-format json` の `conversation_id` はログの `Created conversation` の ID と一致した。相対パスで指定でき、同じパスを再び使うと前のログは上書きされる。そのため**ログのパスは実行ごとに `mktemp` で一意に作る**（Step 2 の標準形）。固定の名前にすると、並列の実行や同じ例を使う別セッションとパスを共有しうる。共有して上書きで1件だけ残ったログは下の3条件を満たしてしまい、どの実行のログかを3条件では見抜けない。判定は実行の直後に行い、判定に使ったログのパスを根拠として記録する。
+
+専用ログが次の3条件をすべて満たすときだけ、その `label` を実行モデルとして記録する。1つでも欠ければ実行モデルは **「未確認」** と記録し、推測で埋めない。`--log-file` を付けずに実行した場合も「未確認」とする（既定のログでは、上書きで1件だけ残ったファイルが3条件を満たしてしまうため、既定のログにはこの判定を使わない）。`--output-format json` で実行した場合は、`conversation_id` がログの `Created conversation` の ID と一致することも確かめる。
+
+1. 指定したログファイルがある
+2. そのログに `Print mode: starting` がちょうど1件ある（2件以上なら別の実行とパスを共有している）
+3. `label="…"` の値が1種類だけある
 
 ```bash
-f=""; for c in $(ls -t ~/.gemini/antigravity-cli/log/cli-*.log 2>/dev/null); do grep -q 'Print mode: starting' "$c" && { f="$c"; break; }; done
-if [ -n "$f" ]; then echo "$f"; grep -o 'label="[^"]*"' "$f" | sort -u; else echo "ログなし"; fi
+AGY_LOG="{Step 2 の実行が表示した AGY_LOG のパス}"   # 同じシェルで続けて判定するなら代入は不要
+n=$(grep -ac 'Print mode: starting' "$AGY_LOG" 2>/dev/null); labels=$(grep -ao 'label="[^"]*"' "$AGY_LOG" 2>/dev/null | sort -u)
+if [ "${n:-0}" -eq 1 ] && [ "$(printf '%s\n' "$labels" | grep -c .)" -eq 1 ]; then echo "$labels"; else echo "未確認"; fi
 ```
 
 ### Step 2: 非対話実行の標準形
 
 ```bash
-agy --mode plan --model gemini-3.1-pro-high -p "{4要素プロンプト}" --output-format json --print-timeout 15m > .tmp/ai-review/{名前}.json 2> .tmp/ai-review/{名前}.log; echo "EXIT=$?"
+REVIEW_DIR="{§3 で表示された REVIEW_DIR}"
+AGY_PROMPT=$(cat "$REVIEW_DIR/{名前}-prompt.md") || exit 1   # 4要素プロンプト。本文は二重引用符の中へ直接書かない（§3）
+AGY_LOG=$(mktemp "$REVIEW_DIR/{名前}.agy-cli.XXXXXX") || exit 1   # 実行ごとに一意のログのパス（Step 1）
+agy --mode plan --model gemini-3.8-flash-high -p "$AGY_PROMPT" --output-format json --print-timeout 15m --log-file "$AGY_LOG" > "$REVIEW_DIR/{名前}.json" 2> "$REVIEW_DIR/{名前}.log"; echo "EXIT=$?"; echo "AGY_LOG=$AGY_LOG"
 ```
 
 | 要素 | 理由 |
 |------|------|
 | `--mode plan` | **レビューでは必須。** 既定モードはワークスペース内の書き込みが許可されており、レビューのつもりが作業ツリーを変更しうる（`accept-edits` / `plan` の2値） |
-| `--model` | 上表のとおり明示する。省略すると Flash になる |
-| `-p` | 非対話（headless）実行。1プロンプトを実行して終了する |
+| `--model` | 上表のとおり明示する。省略すると agy の既定モデル（更新で変わる）になる |
+| `-p` | 非対話（headless）実行。1プロンプトを実行して終了する。本文はファイルから変数へ読み込んで渡す（§3）。agy はファイルを読めないことがあるため、判定に要る内容は本文へ埋め込む（下記「headless の権限モデル」） |
 | `--output-format` | `text` / `json` / `stream-json` の3値に対応。`text` は応答本文のみ、`json` は実測で `conversation_id` / `status` / `response` / `duration_seconds` / `num_turns` / `usage` を返す一括出力、`stream-json` は逐次イベント出力（通常のレビュー用途では `text` か `json` で足りる） |
 | `--print-timeout` | **既定は5分（300秒）。長いレビューでは不足する**ため `15m` 等へ明示的に延ばす。値は Go の duration 文字列が必須で、単位なしの `900` は不正値で EXIT=2 になる。`15m` または `900s` と単位付きで指定すること（2026-08-17 実測。従来「15分＝`900` 秒指定で成功した」としていた記録は誤り）。複数観点・長文対象を1回にまとめる場合は明示的に延ばす |
+| `--log-file` | 実行モデルを確かめる専用ログ（Step 1）。パスは実行ごとに `mktemp` で一意に作り、実行後に表示して記録する。省略すると実行モデルは「未確認」になる |
 | `> {ファイル}` | 応答は **stdout**、診断は **stderr**。リダイレクトで結果だけを回収する |
 | `echo "EXIT=$?"` | 成功は `0`、失敗は非ゼロ（`stderr` と JSON の `error` に詳細） |
 

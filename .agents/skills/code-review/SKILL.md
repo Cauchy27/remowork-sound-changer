@@ -6,11 +6,11 @@ description: |
   デザインは design-critique、文書は document-review、エージェント定義は agent-review、
   スキル構造は internal-structure-review を使用。
   視点・観点・裁定ルールの正本は `.claude/docs/review-matrix.md`。対象はコード実装、使う視点は Claude Code / Codex / Antigravity（3視点・実CLI優先）、使う観点は 1/2/3/4/7（+ 該当時 6・9）。
-  全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
+  全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を網羅レビューの Round 1 先頭で実行する（単独発動は essence-gyaru-review 側に限る）。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: agent-teams
 version: 3.4.0
-updated: 2026-10-09
+updated: 2026-10-23
 ---
 
 # Code Review

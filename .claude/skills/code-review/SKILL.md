@@ -6,7 +6,7 @@ description: |
   デザインは design-critique、文書は document-review、エージェント定義は agent-review、
   スキル構造は internal-structure-review を使用。
   視点・観点・裁定ルールの正本は `.claude/docs/review-matrix.md`。対象はコード実装、使う視点は Claude Code / Codex / Antigravity（3視点・実CLI優先）、使う観点は 1/2/3/4/7（+ 該当時 6・9）。
-  全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を Round 1 先頭で1回実行する（単独発動キーワードは essence-gyaru-review 側に限る）。
+  全モード共通の横断ゲートとして本質ギャルレビュー（essence-gyaru-review）を網羅レビューの Round 1 先頭で実行する（単独発動は essence-gyaru-review 側に限る）。
 allowed-tools: Read, Grep, Glob, Bash, Task, mcp__codex__codex, mcp__codex__codex-reply
 execution_type: agent-teams
 version: 3.4.0
@@ -59,7 +59,7 @@ updated: 2026-10-09
 
 実装作業の途中で本スキルが呼ばれた場合、**レビュー対象は「1ページ / 1機能」単位**とする。
 ファイル追加・関数追加・小修正のたびに本スキルを起動しない。実装単位が**動作する状態**に達した時点で1回だけ起動する。
-P0/P1 の修正後は、**再確認を修正差分に限定**し、本スキルのフルラウンドを再実行しない。
+P0/P1 の修正後は、**再確認を修正差分に限定**し（範囲は正本 [「網羅レビューの回数上限」](../../docs/review-matrix.md#網羅レビューの回数上限) の「差分レビューの範囲」に従う）、本スキルのフルラウンドを再実行しない。
 
 | 種別 | 1単位に含めるもの |
 |------|-----------------|
@@ -115,10 +115,10 @@ Claude Code視点        Codex視点            Antigravity視点
 
 - Claude Code / Codex / Antigravity の3視点の**カウントに含めない独立枠**。目的・意思決定・前提・因果・矛盾・業務上の代償・次アクションの7軸で対象を突く
 - `review-iteration` は網羅レビューの回数（初回1、網羅レビューごとに加算）とする。差分レビュー（正本「網羅レビューの回数上限」）では本質ギャルレビューを再実行せず、`review-iteration` も加算しない（impl-review-loop の差分限定の再確認と同じ扱い）。差分の回数は統合結果の「周回」欄に記す
-- **`code-review` を単体で再実行する場合の `review-iteration` 決定手順**: 同一対象への前回の網羅レビューがあれば「前回 `review-iteration` + 1」を使う。前回値は `.tmp/ai-review/gyaru/round-*/report.md` の最大番号等から確認する（網羅レビューでだけ作られるので、最大番号が網羅の回数になる）。差分の回数は前回の統合結果の「周回」欄から確認する。前回が存在しない初回は 1 とする
+- **`code-review` を単体で再実行する場合の `review-iteration` 決定手順**: 同一対象への前回の網羅レビューがあれば「前回 `review-iteration` + 1」を使う。前回値は `.tmp/ai-review/gyaru/round-*/report.md` の最大番号等から確認する（網羅レビューでだけ作られるので、数え直していなければ最大番号が網羅の回数になる）。差分の回数は前回の統合結果の「周回」欄から確認する。前回が存在しない初回は 1 とする。今回が差分レビューなら、`review-iteration` は前回値のまま、k は前回の「周回」欄の k + 1（前回が網羅レビューなら 1）とする。正本「上限を超えて網羅レビューを行ってよい場合」で別の対象として数え直すときは、n を 1 に戻すが、`review-iteration` は既存のレポートを上書きしないよう最大番号 + 1 を続ける。以後は n と `review-iteration` が一致しないので、n は前回の「周回」欄から求める
 - 出力先: `.tmp/ai-review/gyaru/round-{review-iteration}/report.md`
 - essence-gyaru-review の Instructions（Task で `essence-gyaru-reviewer` を起動 → `validate_report.py` で構造検証）に従う
-- 全指摘ID（`GYARU-{review-iteration}-{3桁}`）と件数を控え、Round 2（裁定）・Round 3（統合）・Round 4（fact-check）へそのまま引き渡す
+- 全指摘ID（`GYARU-{review-iteration}-{3桁}`）と件数を控え、Round 2（裁定）・Round 3（統合）・Round 4（fact-check）へそのまま引き渡す。差分レビューでは新しい ID を作らず、直近の網羅レビューの GYARU-* のうち修正したものを同じ ID のまま Round 2〜4 へ引き渡し、解消を確かめる
 
 ---
 

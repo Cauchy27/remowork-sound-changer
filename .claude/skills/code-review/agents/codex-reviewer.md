@@ -54,7 +54,9 @@ command -v codex && codex --version
 mkdir -p .tmp/ai-review && git check-ignore -q .tmp/ai-review && echo "IGNORED_OK"
 ```
 
-Step 2の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log` に替えて1回実行する。正本ブロックは維持する。
+Step 2の組立・grep手順を使い、ゴールを「ゴールは PONG とだけ返すこと。」、タスク本文を空、出力先を `.tmp/ai-review/probe.md` / `probe.log`、プロンプトファイルを `.tmp/ai-review/probe-prompt.txt` に替えて1回実行する（疎通確認の出力は固定名。先頭の `REVIEW_DIR` の行は使わない）。正本ブロックは維持する。
+
+本実行（Step 2）の出力先は、[reference.md](../reference.md) §1「準備」が実行ごとに `mktemp -d` で作る `REVIEW_DIR` を使う。固定の名前では並列の実行や別セッションと結果を上書きし合う（規則の正本: [ai-cli-execution/reference.md](../../ai-cli-execution/reference.md) §3）。
 
 `EXIT=0` かつ出力ファイルに `PONG` が入っていれば疎通OK。失敗理由は `probe.log` に残る。認証エラーならセットアップ案内 → MCP フォールバックへ。
 
@@ -63,8 +65,9 @@ Step 2の組立・grep手順を使い、ゴールを「ゴールは PONG とだ�
 差分レビューはネイティブサブコマンドを使う。
 
 ```bash
-codex exec -s read-only review -o .tmp/ai-review/diff-review.md --base {ベースブランチ} < /dev/null > .tmp/ai-review/diff-review.log 2>&1; echo "EXIT=$?"
-codex exec -s read-only review -o .tmp/ai-review/diff-review.md --uncommitted < /dev/null > .tmp/ai-review/diff-review.log 2>&1; echo "EXIT=$?"
+REVIEW_DIR="{準備で表示された REVIEW_DIR}"
+codex exec -s read-only review -o "$REVIEW_DIR/diff-review.md" --base {ベースブランチ} < /dev/null > "$REVIEW_DIR/diff-review.log" 2>&1; echo "EXIT=$?"
+codex exec -s read-only review -o "$REVIEW_DIR/diff-review.md" --uncommitted < /dev/null > "$REVIEW_DIR/diff-review.log" 2>&1; echo "EXIT=$?"
 ```
 
 > ⚠️ **`review` は対象指定オプションと位置引数プロンプトを併用できない。** 実測で `exit 2`（`the argument '--uncommitted' cannot be used with '[PROMPT]'`）。
@@ -73,6 +76,7 @@ codex exec -s read-only review -o .tmp/ai-review/diff-review.md --uncommitted < 
 ファイル単位・観点単位のレビューは `codex exec` を使う。
 
 ```bash
+REVIEW_DIR="{準備で表示された REVIEW_DIR}"
 codex_guard_blocks=$(awk '
 $0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
 $0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
@@ -81,7 +85,7 @@ $0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
 step == 1 || step == 3 { print }
 END { if (step != 4) exit 1 }
 ' .claude/docs/codex-prompt-guideline.md) || exit 1
-codex_prompt_file=".tmp/ai-review/review-{観点}-prompt.txt"
+codex_prompt_file="$REVIEW_DIR/review-{観点}-prompt.txt"
 {
   cat <<'CODEX_GOAL'
 ゴールは {1ファイル} を {1観点} でレビューし、根拠付きの指摘を0〜5件返すこと。
@@ -99,8 +103,8 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
-  -o ".tmp/ai-review/review-{観点}.md" - < "$codex_prompt_file" > ".tmp/ai-review/review-{観点}.log" 2>&1
+codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
+  -o "$REVIEW_DIR/review-{観点}.md" - < "$codex_prompt_file" > "$REVIEW_DIR/review-{観点}.log" 2>&1
 echo "EXIT=$?"
 ```
 
@@ -158,7 +162,7 @@ Codex: 利用不可（CLI / MCP とも疎通せず）。Claude Code の別視点
 - [ ] Step 0 で `command -v codex` を実行し、CLI の利用可否を判定してから経路を選んでいる
 - [ ] CLI が使える環境で MCP を選んでいない（Tier を下げた場合は理由を記載している）
 - [ ] CLI 未設定を検出した場合、フォールバック前にセットアップ手順を案内している
-- [ ] 実行前に `mkdir -p .tmp/ai-review` で出力先を用意している
+- [ ] 実行前に出力先を用意している（疎通確認は `mkdir -p .tmp/ai-review`、本実行は実行ごとの `REVIEW_DIR`）
 - [ ] CLI 実行時に `-s read-only`・`-o {ファイル}`・ログの別ファイル出力を付け、組立済み本文はstdin、引数渡し・ネイティブ差分レビューは `< /dev/null` を使っている
 - [ ] `codex exec review` に対象指定と観点プロンプトを併用していない（exit 2 になる）
 - [ ] 結果を読む前に EXIT・ファイル存在・非空の3点を確認している

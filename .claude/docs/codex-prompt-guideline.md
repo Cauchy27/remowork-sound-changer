@@ -36,10 +36,10 @@ Codex へのプロンプトには、**下記の【モデル運用】ブロック
 ```text
 <!-- codex-prompt-model-ops:start -->
 【モデル運用】
-- あなた（GPT-6-Astra / reasoning effort: xhigh）は監督役。xhigh では自動委託（proactive delegation）が効かないため、委託が必要な作業（呼出元の指示、または AGENTS.md の委託条件に該当する作業）は自分でサブエージェントを明示起動する。それ以外の精読・判定・実作業は自分で直接行う
-- サブエージェントを明示的に起動する時は、**モデルと reasoning effort を必ずセットで指定する**。解決順は「明示指定 > `[agents]` 既定 > 親の値」で、モデルだけ指定すると effort はそのモデルの既定（GPT-6-Astra なら `medium`）へ落ちる。省略時にどこへ落ちるかを推測で決めない
-- 大きな問題（設計上の欠陥・原因不明の不具合・広範囲に影響する仕様矛盾）を見つけた時は、個別のサブエージェント（GPT-6-Astra / reasoning effort: max）を起動し、調査・修正させる
-- reasoning effort に `none` は使わない（GPT-6-Astra は非対応）
+- あなた（GPT-6.1-Sol / reasoning effort: xhigh）は監督役。xhigh では自動委託（proactive delegation）が効かないため、委託が必要な作業（呼出元の指示、または AGENTS.md の委託条件に該当する作業）は自分でサブエージェントを明示起動する。それ以外の精読・判定・実作業は自分で直接行う
+- サブエージェントを明示的に起動する時は、**モデルと reasoning effort を必ずセットで指定する**。解決順は「明示指定 > `[agents]` 既定 > 親の値」で、モデルだけ指定すると effort はそのモデルの既定（GPT-6.1-Sol なら `low`）へ落ちる。省略時にどこへ落ちるかを推測で決めない
+- 大きな問題（設計上の欠陥・原因不明の不具合・広範囲に影響する仕様矛盾）を見つけた時は、個別のサブエージェント（GPT-6.1-Sol / reasoning effort: max）を起動し、調査・修正させる
+- reasoning effort に `none` は使わない（GPT-6.1-Sol は非対応）
 <!-- codex-prompt-model-ops:end -->
 ```
 
@@ -48,23 +48,23 @@ Codex へのプロンプトには、**下記の【モデル運用】ブロック
 | 項目 | 内容 |
 |------|------|
 | 委託は明示起動 | 自動委託（automatic task delegation）は `xhigh` には付かない（`~/.codex/models_cache.json` でこの説明が付くのは最上位 effort だけ）。監督役が委託したい作業はサブエージェントを明示起動して振り分ける |
-| 解決順の落とし穴 | サブエージェントの model / effort は「明示指定 > `[agents]` 既定 > 親の値」の順で解決され、モデルだけ指定すると effort はそのモデルの既定（`medium`）へ落ちる。セット指定を必須にしないと深掘り用のサブエージェントが `medium` で動く |
+| 解決順の落とし穴 | サブエージェントの model / effort は「明示指定 > `[agents]` 既定 > 親の値」の順で解決され、モデルだけ指定すると effort はそのモデルの既定（GPT-6.1-Sol なら `low`）へ落ちる。セット指定を必須にしないと深掘り用のサブエージェントが `low` で動く |
 
 ### 前提
 
 | 項目 | 内容 |
 |------|------|
-| 対象モデル識別子 | `gpt-6-astra`（対応 effort: low / medium / high / xhigh / max に加えて ultra。本運用の既定は `xhigh`。別の effort は依頼者が明示した個別実行に限り、実行記録に残す。モデル自体の既定は `medium`。`none` 非対応） |
-| 「xhigh」の意味 | `gpt-6-astra` を reasoning effort `xhigh` で動かす指定。自動委託は付かないため、委託は監督役の明示起動で行う |
-| 親セッションのモデル | `~/.codex/config.toml:2-3` の `model = "gpt-6-astra"` / `model_reasoning_effort = "xhigh"` 固定（実測値）。判断 #4（2026-09-18）・D1（2026-09-24）で既定を xhigh に確定。実測 2026-09-24（Codex CLI 0.153.4）。**プロンプト側で親モデル・effort を切り替えない** |
+| 対象モデル識別子 | `gpt-6.1-sol`（対応 effort: low / medium / high / xhigh / max に加えて ultra。本運用の既定は `xhigh`。別の effort は依頼者が明示した個別実行に限り、実行記録に残す。モデル自体の既定は `low`。`none` 非対応） |
+| 「xhigh」の意味 | `gpt-6.1-sol` を reasoning effort `xhigh` で動かす指定。自動委託は付かないため、委託は監督役の明示起動で行う |
+| 親セッションのモデル | `~/.codex/config.toml:2-3` の `model = "gpt-6.1-sol"` / `model_reasoning_effort = "xhigh"` 固定（実測値）。判断 #4（2026-09-18）・D1（2026-09-24）で既定を xhigh に確定。モデルは 2026-10-11 にオペレーター指示で GPT-6-Astra から GPT-6.1-Sol へ変更。実測 2026-10-11（Codex CLI 0.162.1。`codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"'` の起動成功と、ログの `model: gpt-6.1-sol` / `reasoning effort: xhigh` を確認）。**プロンプト側で親モデル・effort を切り替えない** |
 | サブエージェントの解決順 | 明示指定 > `[agents]` 既定（`agents.default_subagent_model` / `agents.default_subagent_reasoning_effort`）> 親の値。モデルだけ指定すると effort はそのモデルの既定へ落ちる。model だけ設定した custom agent は解決済み effort を保持する（出典: https://learn.chatgpt.com/docs/agent-configuration/subagents ） |
-| `[agents]` 既定 | 現行 `~/.codex/config.toml` には未設定（model・effort とも省略した場合は親の `gpt-6-astra` / `xhigh` を継承） |
+| `[agents]` 既定 | 現行 `~/.codex/config.toml` には未設定（model・effort とも省略した場合は親の `gpt-6.1-sol` / `xhigh` を継承） |
 | 専用サブエージェント定義 | **不要**。Codex 側の標準サブエージェント機構をそのまま使う |
 | CLI 要件 | 利用するCLIで対象モデル・effortが認識され、起動が成功することを確認する。バージョン文字列だけで対応を保証しない。更新実測は log.md に記録する |
 
 Work と local Codex では利用可能なサブエージェント機構や適用指示が異なる。effort の説明だけで委託可能とみなさず、その実行環境で機構が有効か、委託条件が許可されているかを確認する。このブロックを流用する際もモデル・effortのセット指定と大きな問題時の明示起動条件を維持し、親セッションの設定を変更しない。
 
-> ⚠️ 本ブロックは恒久ルールだが、「その他の注意点」#5（恒久ルールは `AGENTS.md` へ）の例外として**毎回プロンプトに書く**。サブエージェントの model / effort セット指定と `none` 禁止はセッション冒頭で効かせないと、深掘り用のサブエージェントが `medium` で走り始めてから是正できないため。
+> ⚠️ 本ブロックは恒久ルールだが、「その他の注意点」#5（恒久ルールは `AGENTS.md` へ）の例外として**毎回プロンプトに書く**。サブエージェントの model / effort セット指定と `none` 禁止はセッション冒頭で効かせないと、深掘り用のサブエージェントが `low` で走り始めてから是正できないため。
 
 ---
 
@@ -182,9 +182,10 @@ Codex は指示がないと**変更のたび・ファイル追加のたびにレ
 
 ### Bash・標準シェルでの組立と確認
 
-対象リポジトリのルートで、出力先ディレクトリを用意してから以下を実行する。`awk` はマーカーの欠落・重複・順序不正を拒否し、原文を加工せず取り出す。ゴールとタスク本文は引用 heredoc に置き、原文は `printf` で挿入する。バッククォート・`$()`・変数文字列を再評価する `eval` や引用なしの heredoc は使わない。
+対象リポジトリのルートで、実行ごとの出力先ディレクトリ `REVIEW_DIR`（作り方と理由は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §3）を用意してから以下を実行する。`awk` はマーカーの欠落・重複・順序不正を拒否し、原文を加工せず取り出す。ゴールとタスク本文は引用 heredoc に置き、原文は `printf` で挿入する。バッククォート・`$()`・変数文字列を再評価する `eval` や引用なしの heredoc は使わない。
 
 ```bash
+REVIEW_DIR="{用意した REVIEW_DIR}"
 codex_guard_blocks=$(awk '
 $0 == "<!-- codex-prompt-model-ops:start -->" { if (step != 0) exit 1; step=1; next }
 $0 == "<!-- codex-prompt-model-ops:end -->" { if (step != 1) exit 1; step=2; print ""; next }
@@ -193,7 +194,7 @@ $0 == "<!-- codex-prompt-scope:end -->" { if (step != 3) exit 1; step=4; next }
 step == 1 || step == 3 { print }
 END { if (step != 4) exit 1 }
 ' .claude/docs/codex-prompt-guideline.md) || exit 1
-codex_prompt_file=".tmp/ai-review/review-prompt.txt"
+codex_prompt_file="$REVIEW_DIR/review-prompt.txt"
 {
   cat <<'CODEX_GOAL'
 ゴールは {対象ファイル} を {観点} でレビューし、根拠付きの指摘を0〜5件返すこと。
@@ -211,8 +212,8 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6-astra -c 'model_reasoning_effort="xhigh"' \
-  -o ".tmp/ai-review/review.md" - < "$codex_prompt_file" > ".tmp/ai-review/review.log" 2>&1
+codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
+  -o "$REVIEW_DIR/review.md" - < "$codex_prompt_file" > "$REVIEW_DIR/review.log" 2>&1
 echo "EXIT=$?"
 ```
 
