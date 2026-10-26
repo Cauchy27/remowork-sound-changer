@@ -8,10 +8,10 @@ timestamp: 2026-07-09T00:00:00Z
 
 # Codex プロンプト設計ガイドライン
 
-Codex（`codex exec` CLI / `mcp__codex__codex` / `mcp__codex__codex-reply`）へプロンプトを生成する際の共通ルール。
+Codex（`codex exec` CLI / `mcp__codex__codex` / `mcp__codex__codex-reply`）へプロンプトを生成する際の共通ルール。MCP のツール名は Claude Code が実行役の場合の名前で、他の実行役は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md)「実行役ごとの読み替え」節で読み替える。
 **レビュー依頼・実装依頼・調査依頼など、Codex に指示を出す全ての場面に適用する。**
 
-> どの経路で Codex を呼ぶか（CLI > MCP > Claude 別視点）は [外部AIツール実行ポリシー](ai-cli-execution-policy.md) を参照。本ドキュメントはプロンプトの中身のみを扱う。
+> どの経路で Codex を呼ぶか（CLI > MCP > 親セッション上の別視点）は [外部AIツール実行ポリシー](ai-cli-execution-policy.md) を参照。本ドキュメントはプロンプトの中身のみを扱う。
 
 > 想定読者: Codex を**呼び出す側**（プロンプトを生成する AI・人間）。Codex 自身が本ドキュメントを読んだ場合は、受け取るプロンプトがこの形式で来ることの説明として扱えばよく、自身の応答形式を変える必要はない。
 
@@ -182,7 +182,7 @@ Codex は指示がないと**変更のたび・ファイル追加のたびにレ
 
 ### Bash・標準シェルでの組立と確認
 
-対象リポジトリのルートで、実行ごとの出力先ディレクトリ `REVIEW_DIR`（作り方と理由は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §3）を用意してから以下を実行する。`awk` はマーカーの欠落・重複・順序不正を拒否し、原文を加工せず取り出す。ゴールとタスク本文は引用 heredoc に置き、原文は `printf` で挿入する。バッククォート・`$()`・変数文字列を再評価する `eval` や引用なしの heredoc は使わない。
+対象リポジトリのルートで、実行ごとの出力先ディレクトリ `REVIEW_DIR`（作り方と理由は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §3）を用意してから以下を実行する。起動前に有料 API への接続確認を行う（同 §3「有料 API への接続確認」）。Claude Code が実行役なら、`codex exec` は Bash の背景実行で起動する（同 §3「長時間の CLI 実行」）。`awk` はマーカーの欠落・重複・順序不正を拒否し、原文を加工せず取り出す。ゴールとタスク本文は引用 heredoc に置き、原文は `printf` で挿入する。バッククォート・`$()`・変数文字列を再評価する `eval` や引用なしの heredoc は使わない。
 
 ```bash
 REVIEW_DIR="{用意した REVIEW_DIR}"
@@ -203,7 +203,7 @@ CODEX_GOAL
   cat <<'CODEX_TASK'
 【対象ファイル】{対象ファイル}
 【観点】{観点}
-【制約】根拠を優先し、件数を埋めない。ファイルを実際に読み、根拠となる行番号を添える（憶測禁止）。修正は行わない
+【制約】根拠を優先し、件数を埋めない。ファイルを実際に読み、根拠となる行番号を添える（憶測禁止）。修正は行わない。あなたは起動された視点である。手順素材の『起動方法』節（CLI・MCP の起動）は実行せず、スキル・サブエージェントを起動しない（再委託しない）
 【完了条件】各指摘に優先度・行番号・内容を揃える。0件なら「指摘なし」と判断根拠を返す
 【出力形式】テーブル
 CODEX_TASK
@@ -212,19 +212,19 @@ CODEX_TASK
 [ "$(grep -cFx '【スコープ】' "$codex_prompt_file")" -eq 1 ] &&
 ! grep -qF '{{CODEX_GUARD_BLOCKS}}' "$codex_prompt_file" || exit 1
 grep -nE '^【(モデル運用|スコープ)】$' "$codex_prompt_file" || exit 1
-codex exec -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
+codex exec --ignore-user-config -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' \
   -o "$REVIEW_DIR/review.md" - < "$codex_prompt_file" > "$REVIEW_DIR/review.log" 2>&1
 echo "EXIT=$?"
 ```
 
-確認対象は正本ファイルだけでなく、**送信する組立済みプロンプト**。`grep` で両見出しが各1件、未展開記号が0件であることを確認してから起動する。`- < "$codex_prompt_file"` が本文をstdinへ渡すため、この方式では `< /dev/null` を重ねない。プロンプトを引数で渡す別の例・ネイティブ差分レビューでは従来どおり `< /dev/null` を使う。追加の配布スクリプトや新しいランタイムは不要。
+確認対象は正本ファイルだけでなく、**送信する組立済みプロンプト**。`grep` で両見出しが各1件、未展開記号が0件であることを確認してから起動する。`- < "$codex_prompt_file"` が本文をstdinへ渡すため、この方式では `< /dev/null` を重ねない。プロンプトを引数で渡す別の例・ネイティブ差分レビューでは従来どおり `< /dev/null` を使う。`--ignore-user-config` は利用者の config.toml の MCP を外すために付ける（効果・残るもの・制約は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §5 Step 2）。追加の配布スクリプトや新しいランタイムは不要。
 
 ### Bashを使わない経路（MCP・Read/Grep等）
 
 1. 呼出側が Read 等で本書を読み、4つのマーカーが各1件・記載順どおりにあることを確認する。モデル運用とスコープのマーカー内全文を、マーカー自身を除いて取得する。
 2. 各テンプレートの `{{CODEX_GUARD_BLOCKS}}` を取得した全文へ置き換え、**実際に送信する `prompt` 引数**を組み立てる。再記述や要約、受信側への「正本を読め」という指示では代用しない。
 3. 送信前に実引数を見直し、ゴールが先頭、両ブロックが各1件・原文一致、未展開記号が0件であることを確認する。許可済みのプロンプト保存先がある場合は Grep でも確認する。Write がない経路ではファイル保存を要求せず、同じ確認を送信文字列に対して行う。
-4. 分割した `codex-reply` の各依頼にも同じ展開を行う。CLIの利用可否を確認したうえで経路を選び、モデルとeffortを指定する場合は必ずセットにする。
+4. 分割した `codex-reply` の各依頼にも同じ展開を行う。CLIの利用可否を確認したうえで経路を選び、モデルとeffortを指定する場合は必ずセットにする。送信前に有料 API への接続確認を行う（[ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §3「有料 API への接続確認」）。
 
 global・リポジトリ入口・実行プロンプトは、セッション開始時のガードをそれぞれの適用層で効かせるために併存する。globalや入口を廃止せず、設計理由と本文の更新先を本書に集約する。
 
@@ -253,6 +253,7 @@ global・リポジトリ入口・実行プロンプトは、セッション開�
 【制約】
 - 指摘は根拠を優先して0〜5件（1〜2件も可）。件数を埋めるために追加せず、根拠となる行番号を必ず添える
 - 対象ファイルを実際に読んでから判定する（憶測禁止）
+- あなたは起動された視点である。手順素材の『起動方法』節（CLI・MCP の起動）は実行せず、スキル・サブエージェントを起動しない（再委託しない）
 
 【完了条件】
 - 各指摘に 優先度（[MUST]/[SHOULD]/[NIT]）・行番号・内容 が揃っている

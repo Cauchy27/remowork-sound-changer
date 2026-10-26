@@ -2,13 +2,13 @@
 name: ai-cli-execution
 description: |
   実CLI3視点（Claude Code / Codex / Antigravity）を CLI 優先の3層モデルで実行するスキル。
-  経路の優先順位は CLI > MCP > Claude 別視点。CLI 未設定・認証切れ時はセットアップ／フォールバック手順を必ず案内する。
+  経路の優先順位は CLI > MCP > 親セッション上の別視点。CLI 未設定・認証切れ時はセットアップ／フォールバック手順を必ず案内する。
   「Codexで実行」「Codexに聞いて」「agyで実行」「Antigravityで」「claude -pで実行」「外部AIツール」「セカンドオピニオン」で自動発動。
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: standalone
 version: 1.1.11
-updated: 2026-10-02
+updated: 2026-10-26
 ---
 
 # Ai Cli Execution

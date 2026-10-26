@@ -32,7 +32,7 @@ updated: 2026-10-09
 
 ## 技術情報の参照
 
-ライブラリ・フレームワークの仕様は記憶に頼らず Context7 MCP で最新を取得する。手順と使う場面: [technical-reference-lookup.md](../../docs/technical-reference-lookup.md)
+ライブラリ・フレームワークの仕様は記憶に頼らない。Context7 MCP があれば使う。なければ公式ドキュメント・一次資料で確かめる。確かめられない点は未確認として残す。手順と使う場面: [technical-reference-lookup.md](../../docs/technical-reference-lookup.md)
 
 ## コンテキスト節約
 
@@ -47,16 +47,26 @@ updated: 2026-10-09
 | 環境 | 実行経路 |
 |---|---|
 | Claude Code | Task で `subagent_type="essence-gyaru-reviewer"` を起動 |
-| Codex / Antigravity 等 | [ai-cli-execution](../ai-cli-execution/SKILL.md) の3層モデル（CLI優先）に従い、同じエージェント正本とreference.mdを参照させる |
+| Codex / Antigravity 等 | 下記「Codex / Antigravity が実行役のときの手順」に従い、各ツールのサブエージェント機構で同じエージェント正本とreference.mdを参照させる |
 | Cursor | 独立サブエージェント起動手段を持たないため、下記「Cursor での手動実行手順」に従う |
 
-独立サブエージェントを起動できない環境だけ、他レビュアーの結果を読む前に、同一セッションでエージェント正本の判断軸を手動適用する。
+独立サブエージェントを起動できない環境だけ、他レビュアーの結果を読む前に、同一セッションでエージェント正本の判断軸を手動適用し、独立性の低下を記録する。
+
+### Codex / Antigravity が実行役のときの手順
+
+Claude Code と同じく、CLI ではなくサブエージェントで起動する。起動手段の対応は [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) の「実行役ごとの読み替え」に従う。`agy -p` などのヘッドレス CLI へ Instructions の依頼文をそのまま渡さない（ファイルの読み書きが拒否され、レポートが作られない）。
+
+1. `{対象}`・`{review-iteration}`・`{出力先}` を Instructions 手順1と同じく決める
+2. サブエージェントを起動する。Codex は明示的なサブエージェント起動で、モデルと reasoning effort をセットで指定する。Antigravity は `invoke_subagent` で `.claude/agents/llm-personas/essence-gyaru-reviewer.md` の定義を読み込ませる。依頼文は Instructions 手順2の `prompt` と同じにし、末尾に「`{出力先}` へ書き込めない場合は、3-5行の返答の代わりに reference.md の出力フォーマットどおりのレポート全文を返すこと」を足す
+3. サブエージェントが `{出力先}` へ書けなかった場合は、返ってきたレポート全文を実行役が `{出力先}` へそのまま保存する（内容を書き換えない）
+4. Instructions 手順3〜5（`validate_report.py` での検証以降）を同じく行う。`ERROR` の修正は、サブエージェントへ修正を依頼するか、実行役が構造だけを直す（指摘の中身は変えない）
+5. サブエージェントを起動できない場合は、次の「Cursor での手動実行手順」に従う
 
 ### Cursor での手動実行手順
 
 1. `{対象}` と `{review-iteration}` を確認する
-2. [reference.md](./reference.md) セクション3（7軸・出力フォーマット）を、他レビュアーの結果を読まずに同一セッション内で判断軸として手動適用する
-3. 出力フォーマットどおりに `{出力先}` へ手動で保存する
+2. エージェント正本の「判断軸」と [reference.md](./reference.md) セクション1（7軸と質問バンク）を、他レビュアーの結果を読まずに同一セッション内で判断軸として手動適用する
+3. reference.md セクション3の出力フォーマットどおりに `{出力先}` へ手動で保存し、同節「手動適用の記録」を足す
 4. `python3 .claude/skills/essence-gyaru-review/scripts/validate_report.py --report {出力先} --iteration {review-iteration}` を実行し構造を検証する
 5. `ERROR` が出た場合は該当箇所を修正し、手順4を再実行する
 
@@ -80,10 +90,14 @@ updated: 2026-10-09
      subagent_type="essence-gyaru-reviewer",
      description="本質ギャルレビュー iteration {review-iteration}",
      prompt="
+       AIの出力は「仕様を曲解しがちなジュニアのPR」として扱う。.claude/docs/review-matrix.md の共通前提に従う。
+       許可範囲: 読み取りと {出力先} への書き込みのみ（対象の修正・コミット・外部送信はしない）
        .claude/agents/llm-personas/essence-gyaru-reviewer.md と
        .claude/skills/essence-gyaru-review/reference.md だけを
        判断軸・出力フォーマットの正本として読むこと。
-       対象: {対象}
+       対象: {対象}（対象版: {SHA/差分識別}）
+       照合する正本: {パス。無ければ「特定できず」} / 受入条件: {不変条件・受入条件}
+       未確認事項: {未実施の検証等。無ければ「なし」}
        review-iteration: {review-iteration}
        出力先: {出力先}
        対象本体と関連する正本を確認し、reference.md の出力フォーマットで
@@ -92,6 +106,8 @@ updated: 2026-10-09
      "
    )
    ```
+
+   送信前に、共通前提の1文・許可範囲・対象版・正本・受入条件・未確認事項が prompt に入っていることを確かめる。
 
 3. `python3 .claude/skills/essence-gyaru-review/scripts/validate_report.py --report {出力先} --iteration {review-iteration}` で構造を検証する。`ERROR` が出たら該当箇所を修正して再実行する。
 4. 単独依頼はレポートのパス・指摘件数・全指摘IDを呼び出し元へ返して完了する。

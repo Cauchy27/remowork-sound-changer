@@ -2,7 +2,7 @@
 name: ai-cli-execution
 description: |
   実CLI3視点（Claude Code / Codex / Antigravity）を CLI 優先の3層モデルで実行するスキル。
-  経路の優先順位は CLI > MCP > Claude 別視点。CLI 未設定・認証切れ時はセットアップ／フォールバック手順を必ず案内する。
+  経路の優先順位は CLI > MCP > 親セッション上の別視点。CLI 未設定・認証切れ時はセットアップ／フォールバック手順を必ず案内する。
   「Codexで実行」「Codexに聞いて」「agyで実行」「Antigravityで」「claude -pで実行」「外部AIツール」「セカンドオピニオン」で自動発動。
   レビューでの利用は code-review / internal-structure-review、エージェント定義の検証は agent-review からも参照される。
 allowed-tools: Read, Grep, Glob, Bash, mcp__codex__codex, mcp__codex__codex-reply
@@ -20,28 +20,34 @@ updated: 2026-09-18
 ## 概要
 
 **Claude Code（`claude -p`）/ Codex / Antigravity の3視点**を実行する際の経路選択と実行手順。
-Claude Code はオーケストレーター本体だけでなく、**別プロセスとしてネスト起動する `claude -p` も対象に含む**（review-matrix.md が定める第1層3視点のうちの1つ）。
-**経路の優先順位は CLI > MCP > Claude 別視点。** CLI が使えるのに MCP を選ぶのは違反。
+Claude Code 視点は、**親セッション（オーケストレーター）とは別プロセスとして起動する `claude -p`** で実行する（review-matrix.md が定める第1層3視点のうちの1つ。親が Claude Code ならネスト起動になる）。
+**経路の優先順位は CLI > MCP > 親セッション上の別視点。** CLI が使えるのに MCP を選ぶのは違反。
+親セッションが Claude Code 以外（Codex・Antigravity）のときは、[reference.md](reference.md)「実行役ごとの読み替え」節で手順を読み替える。
 
 ## 実行フロー（要約）
 
 ```
 Step 0: CLI の利用可否を判定（command -v claude/codex/agy && {cmd} --version 等）
    ↓ 使える
-Tier 1: CLI で実行（出力はファイルへ。タイムアウト由来の分割は不要）
+有料 API への接続確認（従量課金に接続しうる・判定できない → CLI を呼ばずに止め、オペレーターへ確認）
+   ↓ 問題なし
+Tier 1: CLI で実行（出力はファイルへ。Claude Code が実行役なら長時間の起動は背景実行。タイムアウト由来の分割は不要）
    ↓ 使えない（未設定 / OAuth 失効・認証切れ等）
-CLI セットアップ手順 or フォールバック手順を必ず案内（勝手に MCP・Tier3 へ落とさない）
-   ↓ ユーザーが選択、または Tier2 非対応ツール（Claude Code / Antigravity）
-Tier 2: MCP で実行（Codex のみ対応。必ずタスク分割。1リクエストは数分でタイムアウトする）
-   ↓ どちらも不可
-Tier 3: Claude Code の別視点で代替、または Claude Code 自身が親セッションで直接実施
+CLI セットアップ手順を案内し、止めずに下位 Tier で続行（成果物に「{ツール} CLI 未設定のため Tier {n} で実施」と明記）
+   ↓ Codex
+Tier 2: MCP で実行（Codex のみ対応。移る前に有料 API への接続確認を行う。必ずタスク分割。1リクエストは数分でタイムアウトする）
+   ↓ どちらも不可、または Tier 2 を持たないツール（Claude Code / Antigravity）
+Tier 3: 親セッション上の別視点（ペルソナ）で代替、または親自身が同一セッションで直接実施
    （独立性が下がる旨を成果物に明記）
 ```
+
+**案内を出したら判断を仰いで止まらず、下位 Tier で続行する**（正本は [reference.md](reference.md) §4）。例外は、有料 API への接続確認で止める条件に当たった場合で、このときは止めてオペレーターへ確認する（[reference.md](reference.md) §3「有料 API への接続確認」）。利用上限に達した場合は、有料へ切り替えずに定額の別ツールの視点か Tier 3 で続行し、先へ進む手段が従量課金の接続しか無いときだけ止める（[reference.md](reference.md) §6.5）。
 
 **Claude Code（`claude -p`）は Antigravity と同じく Tier 2（MCP）を持たない。** 未設定または OAuth 失効時は Tier 3 へ直接フォールバックする（判定方法・手順は [reference.md](reference.md) §4.5）。
 
 ## 禁止事項（要点）
 
+- 有料 API（従量課金）に接続しうる・判定できないまま CLI を呼ぶ、または利用上限時に有料への切り替えを受け入れる（[reference.md](reference.md) §3「有料 API への接続確認」）
 - CLI が使える環境で試行しない / CLI が使えるのに MCP を選ぶ
 - MCP へ重いタスクを1発で投げる（必ず分割）
 - 「とにかく待つ」「同じ重いリクエストを再投行する」（`claude -p` の OAuth 再認証要求に対して再試行を繰り返すことも含む）

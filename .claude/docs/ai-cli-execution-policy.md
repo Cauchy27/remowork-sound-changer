@@ -1,14 +1,14 @@
 ---
 type: Reference
 title: 外部AIツール実行ポリシー（CLI 優先・3層モデル）
-description: Claude Code（claude -p）/ Codex / Antigravity を呼ぶ経路の優先順位（CLI > MCP > Claude 別視点）、各ツールの強みと担当領域、CLI 未設定時のセットアップ案内、検証済みコマンド仕様
+description: Claude Code（claude -p）/ Codex / Antigravity を呼ぶ経路の優先順位（CLI > MCP > 親セッション上の別視点）、各ツールの強みと担当領域、CLI 未設定時のセットアップ案内、検証済みコマンド仕様
 tags: [claude-code, codex, antigravity, cli, mcp, review, policy, fallback]
 timestamp: 2026-08-02T00:00:00Z
 ---
 
 # 外部AIツール実行ポリシー（CLI 優先・3層モデル）
 
-Claude Code（`claude -p`。オーケストレーター本体からのネスト起動を含む）/ Codex / Antigravity という**3視点**を呼ぶ際の経路と担当領域を定める。**Claude Code 自身も対象に含む**（別プロセスとして起動する `claude -p` を、Codex/Antigravity と同格の視点として扱う）。
+Claude Code（`claude -p`。親セッションとは別プロセスで起動する。親が Claude Code ならネスト起動）/ Codex / Antigravity という**3視点**を呼ぶ際の経路と担当領域を定める。親セッション（オーケストレーター）は Claude Code・Codex・Antigravity のいずれでもよく、手順の読み替えは [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md)「実行役ごとの読み替え」節に従う。**Claude Code 自身も対象に含む**（別プロセスとして起動する `claude -p` を、Codex/Antigravity と同格の視点として扱う）。
 プロンプトの本文・適用層の理由は [Codex プロンプト設計ガイドライン](codex-prompt-guideline.md) を正本とする。Codexへの各依頼は、冒頭のゴール文直後に正本の【モデル運用】【スコープ】を全文展開し、送信本文で存在を確認する。実装・修正依頼には【レビュー粒度】も続ける（レビュー専用依頼には入れない）。CLI・非Bash経路とも同ガイドラインの展開・確認手順に従い、参照を示すだけで済ませない。
 
 **本ファイルが方針（対象ツールと担当領域・経路の優先順位）の正本。実行手順の正本は [ai-cli-execution スキルの reference.md](../skills/ai-cli-execution/reference.md)。**
@@ -21,9 +21,9 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 
 | ツール | CLI | 強み |
 |--------|-----|------|
-| **Claude Code** | `claude -p`（オーケストレーター本体からのネスト起動。別プロセスとして独立実行） | 大コンテキスト推論、プロジェクト固有規約の理解、Agent Teams 並列実行 |
+| **Claude Code** | `claude -p`（別プロセスとして独立実行。親が Claude Code ならネスト起動） | 大コンテキスト推論、プロジェクト固有規約の理解、Agent Teams 並列実行 |
 | **Codex**（GPT-6 系） | `codex exec` | 実行・デバッグ・長期タスクの持続性。指摘が具体的で実行可能。ゴールへの執着が強く、中途半端な結論で止まらない |
-| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-3.8-flash-high` | **Gemini 3 系指定時**、視覚・空間推論とデザインで主要マルチモーダルベンチマーク首位級。2D UI/UX とグラフィカルプログラミングの理解が native |
+| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-4-argon-high` | **Gemini 系指定時**、視覚・空間推論とデザインに強い（下記の根拠は Gemini 3 系での評価）。2D UI/UX とグラフィカルプログラミングの理解が native。レビューで指定するモデルは 2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から `gemini-4-argon-high` へ変更 |
 
 ### 観点の割り当て指針
 
@@ -44,24 +44,26 @@ Claude Code（`claude -p`。オーケストレーター本体からのネスト�
 | Tier | 手段 | 使う条件 |
 |------|------|----------|
 | **1** | **各ツールの CLI**（`claude -p` / `codex exec` / `agy -p`） | **既定**。PATH にあり認証済みなら必ずこちら |
-| 2 | MCP（`mcp__codex__codex` 等） | CLI が使えない場合のみ。**Codex のみ対応・タスク分割必須** |
-| 3 | Claude Code の別視点サブエージェント（`.claude/agents/llm-personas/`）、または Claude Code 自身が親セッションで直接実施 | 実ツールが使えない場合の代替 |
+| 2 | MCP（`mcp__codex__codex` 等。ツール名は Claude Code での名前で、他の実行役は「実行役ごとの読み替え」節） | CLI が使えない場合のみ。**Codex のみ対応・タスク分割必須** |
+| 3 | 親セッション上の別視点サブエージェント（ペルソナ定義 `.claude/agents/llm-personas/` を読ませる）、または親自身が同一セッションで直接実施 | 実ツールが使えない場合の代替 |
 
-※ **Antigravity と Claude Code は MCP 経路（Tier 2）を持たない。** CLI 不可時はどちらも Tier 2 を飛ばして直接 Tier 3（Claude 別視点、または Claude Code 自身が親セッションで直接実施）へ移る。
+※ **Antigravity と Claude Code は MCP 経路（Tier 2）を持たない。** CLI 不可時はどちらも Tier 2 を飛ばして直接 Tier 3（親セッション上の別視点、または親自身が同一セッションで直接実施）へ移る。
 
-**CLI を飛ばして MCP・Claude 代替を選ぶことは禁止。** Tier を下げるたびに理由を成果物へ記録する。
+**CLI を飛ばして MCP・親セッション上の代替を選ぶことは禁止。** Tier を下げるたびに理由を成果物へ記録する。
 
-Claude の独立 CLI は要求モデルを引数で明示し、親内サブエージェントは呼出指定・登録定義・環境既定を含むモデル解決順（正本はテンプレートリポジトリの agent-model-tuning.md。配布対象外）で確認する。`CLAUDE_CODE_SUBAGENT_MODEL` が未指定時の既定に関与するため、Tier 3 の視点名をモデルの証拠とせず、[独立性の申告](review-matrix.md) に要求モデル・実行モデル・根拠・起動経路を残す。
+**有料 API（従量課金）へ接続しうる、または判定できないときは、CLI を呼ばずに止めてオペレーターへ確認する**（下位 Tier への自動フォールバックより優先する。利用上限に達したときも有料へ切り替えない。判定は [ai-cli-execution/reference.md](../skills/ai-cli-execution/reference.md) §3「有料 API への接続確認」。2026-10-26 オーナー指示）。
+
+Claude の独立 CLI は要求モデルを引数で明示し、親内サブエージェントは（親が Claude Code の場合）呼出指定・登録定義・環境既定を含むモデル解決順（正本はテンプレートリポジトリの agent-model-tuning.md。配布対象外）で確認する。`CLAUDE_CODE_SUBAGENT_MODEL` が未指定時の既定に関与するため、Tier 3 の視点名をモデルの証拠とせず、[独立性の申告](review-matrix.md) に要求モデル・実行モデル・根拠・起動経路を残す。
 
 ### CLI を最優先する理由
 
 | 観点 | CLI | MCP |
 |------|-----|-----|
-| タイムアウト | Bash tool 側で制御可能。長時間タスクを1発で投げられる | 1リクエスト数分で MCP タイムアウト。**タスク分割が必須** |
+| タイムアウト | 実行役側で制御可能。長時間タスクを1発で投げられる（Claude Code の Bash は前面実行が既定2分・上限10分のため、視点起動は背景実行にする。ai-cli-execution/reference.md §3「長時間の CLI 実行」） | 1リクエスト数分で MCP タイムアウト。**タスク分割が必須** |
 | 結果の回収 | `-o FILE` で最終メッセージだけをファイル取得 | タイムアウトするとファイル書き出しも消える |
 | コンテキスト | 出力をファイルへ逃がせるためメインを圧迫しない（実測: 1レビューの生ログは数百KB規模） | 応答が丸ごとコンテキストに載る |
 | レビュー機能 | `codex exec review` のネイティブ差分レビューが使える | 相当機能なし |
-| 権限制御 | `-s read-only` でサンドボックス指定 | MCP サーバー設定に依存 |
+| 権限制御 | `-s read-only` でサンドボックス指定。`-s` はシェルを縛るだけで MCP のツールには効かないため、視点のレビューでは `--ignore-user-config` で利用者の設定の MCP も外す（ai-cli-execution/reference.md §5 Step 2） | MCP サーバー設定に依存 |
 
 ---
 
