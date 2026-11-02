@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>[案件名] 進捗報告</title>
+  <!-- オフライン配布では次の行を消してよい。書体は OS の日本語ゴシック体になる -->
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* 値の正本はレポート・文書のデザイン基準（report-design-standard.md） */
+    :root {
+      /* ブランド差し替えはこの 3 行だけを変える */
+      --key: #0031d8;
+      --key-strong: #00118f;
+      --key-bg: #e8f1fe;
+
+      /* 文字・面・罫線 */
+      --text-heading: #1a1a1a;
+      --text-body: #333333;
+      --text-sub: #666666;
+      --bg: #ffffff;
+      --bg-subtle: #f2f2f2;
+      --bg-th: #e6e6e6;
+      --line: #949494;
+      --line-subtle: #7f7f7f;
+      --surface: var(--bg);
+
+      /* 状態の色。淡い背景の上の枠線には文字の色を使う */
+      --ok-text: #197a4b;
+      --ok-bg: #e6f5ec;
+      --err-text: #ce0000;
+      --err-bg: #fdeeee;
+      --warn-text: #806300;
+      --warn-bg: #fbf5e0;
+      --caution-text: #ac3e00;
+      --caution-bg: #ffeee2;
+
+      /* 書体 */
+      --font-sans: 'Noto Sans JP', sans-serif;
+      --font-mono: 'Noto Sans Mono', monospace;
+
+      /* 文字の大きさ。文書タイトルが h1、見出し 1 が h2、見出し 2 が h3、見出し 3 が h4 */
+      --fs-title: 32px;
+      --fs-heading-1: 24px;
+      --fs-heading-2: 20px;
+      --fs-heading-3: 17px;
+      --fs-body: 16px;
+      --fs-table: 16px;
+      --fs-table-dense: 14px;
+      --fs-note: 14px;
+
+      /* 行の送りと字間 */
+      --lh-heading: 1.5;
+      --lh-heading-3: 1.7;
+      --lh-body: 1.75;
+      --lh-table: 1.7;
+      --lh-table-dense: 1.3;
+      --lh-note: 1.5;
+      --ls-title: 0.01em;
+      --ls-text: 0.02em;
+
+      /* 余白の段階 */
+      --space-1: 8px;
+      --space-2: 16px;
+      --space-3: 24px;
+      --space-4: 40px;
+      --space-5: 64px;
+      --cell-y: 12px;
+      --cell-x: 16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      font-size: var(--fs-body);
+      font-weight: 400;
+      line-height: var(--lh-body);
+      letter-spacing: var(--ls-text);
+      overflow-wrap: break-word;
+      color: var(--text-body);
+      background-color: var(--bg);
+    }
+
+    main { max-width: 60rem; margin: 0 auto; padding: var(--space-4) var(--space-3) var(--space-5); }
+    section { margin-top: var(--space-4); }
+
+    /* タイトル部 */
+    .doc-header { padding-bottom: var(--space-2); border-bottom: 2px solid var(--key); }
+    .doc-kind {
+      margin: 0 0 var(--space-1);
+      font-size: var(--fs-note);
+      font-weight: 700;
+      line-height: var(--lh-note);
+      letter-spacing: 0;
+      color: var(--key);
+      background-color: var(--surface);
+    }
+
+    /* メタ情報 */
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1) var(--space-3);
+      margin: var(--space-2) 0 0;
+      font-size: var(--fs-note);
+      line-height: var(--lh-note);
+      letter-spacing: 0;
+      color: var(--text-sub);
+      background-color: var(--surface);
+    }
+    .meta div { display: flex; gap: var(--space-1); }
+    .meta dt { font-weight: 700; }
+    .meta dd { margin: 0; }
+
+    /* 見出しと本文 */
+    h1, h2, h3, h4 { font-weight: 700; color: var(--text-heading); background-color: var(--surface); }
+    h1 { margin: 0; font-size: var(--fs-title); line-height: var(--lh-heading); letter-spacing: var(--ls-title); }
+    h2 {
+      margin: 0 0 var(--space-2);
+      padding-bottom: var(--space-1);
+      border-bottom: 1px solid var(--line);
+      font-size: var(--fs-heading-1);
+      line-height: var(--lh-heading);
+    }
+    h3 { margin: var(--space-3) 0 var(--space-1); font-size: var(--fs-heading-2); line-height: var(--lh-heading); }
+    h4 { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-heading-3); line-height: var(--lh-heading-3); }
+    p { margin: 0 0 var(--space-2); }
+    ul, ol { margin: 0 0 var(--space-2); padding-left: var(--space-3); }
+    li + li { margin-top: var(--space-1); }
+    p, ul, ol { max-width: 42rem; }
+    b, strong { font-weight: 700; }
+    em, i, cite, dfn, var, address { font-style: normal; }
+    a { color: var(--key-strong); background-color: var(--surface); text-decoration: underline; }
+    code { padding: 0 var(--space-1); font-family: var(--font-mono); font-size: 1em; color: var(--text-body); background-color: var(--bg-subtle); }
+
+    /* 結論の枠 */
+    .callout {
+      --surface: var(--key-bg);
+      max-width: 42rem;
+      margin: 0 0 var(--space-3);
+      padding: var(--space-2) var(--space-3);
+      border-left: 4px solid var(--key);
+      color: var(--text-body);
+      background-color: var(--surface);
+    }
+    .callout > :last-child { margin-bottom: 0; }
+
+    /* 状態の表示。語で示し、色は補助にする */
+    .status { display: inline-block; padding: 0 var(--space-1); border: 1px solid; font-weight: 700; }
+    .status-ok { color: var(--ok-text); background-color: var(--ok-bg); border-color: var(--ok-text); }
+    .status-err { color: var(--err-text); background-color: var(--err-bg); border-color: var(--err-text); }
+    .status-warn { color: var(--warn-text); background-color: var(--warn-bg); border-color: var(--warn-text); }
+    .status-caution { color: var(--caution-text); background-color: var(--caution-bg); border-color: var(--caution-text); }
+    .status-info { color: var(--key); background-color: var(--key-bg); border-color: var(--key); }
+
+    /* 表。幅が足りないときはこの枠の内側だけが横に動く */
+    .table-wrap { margin: 0 0 var(--space-3); overflow-x: auto; }
+    .table-wrap:focus-visible { outline: 2px solid var(--key); outline-offset: 2px; }
+    table {
+      width: 100%;
+      min-width: 34rem;
+      border-collapse: collapse;
+      font-size: var(--fs-table);
+      line-height: var(--lh-table);
+      letter-spacing: 0;
+    }
+    th, td { padding: var(--cell-y) var(--cell-x); border: 1px solid var(--line-subtle); text-align: left; vertical-align: top; }
+    th { font-weight: 700; white-space: nowrap; color: var(--text-heading); background-color: var(--bg-th); }
+    td { color: var(--text-body); background-color: var(--bg); }
+    .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .table-few { --cell-y: 20px; }
+    .table-dense { min-width: 46rem; font-size: var(--fs-table-dense); line-height: var(--lh-table-dense); }
+    .table-dense tbody tr:nth-child(even) td { background-color: var(--bg-subtle); }
+
+    /* 次のアクション */
+    .table-actions th:nth-child(2) { width: 10rem; }
+    .table-actions th:nth-child(3) { width: 9rem; }
+
+    /* 注記 */
+    .note {
+      max-width: 42rem;
+      margin: 0 0 var(--space-2);
+      font-size: var(--fs-note);
+      line-height: var(--lh-note);
+      letter-spacing: 0;
+      color: var(--text-sub);
+      background-color: var(--surface);
+    }
+    .table-wrap + .note { margin-top: calc(-1 * var(--space-2)); }
+
+    @media (max-width: 600px) {
+      main { padding-right: var(--space-2); padding-left: var(--space-2); }
+    }
+
+    /* 印刷。基準の pt の列へ切り替える */
+    @page { size: A4; margin: 20mm; }
+    @media print {
+      :root {
+        --fs-title: 24pt;
+        --fs-heading-1: 18pt;
+        --fs-heading-2: 15pt;
+        --fs-heading-3: 13pt;
+        --fs-body: 12pt;
+        --fs-table: 10.5pt;
+        --fs-table-dense: 10.5pt;
+        --fs-note: 10.5pt;
+        --space-1: 6pt;
+        --space-2: 12pt;
+        --space-3: 18pt;
+        --space-4: 30pt;
+        --space-5: 48pt;
+        --cell-y: 9pt;
+        --cell-x: 12pt;
+      }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      main { max-width: none; padding: 0; }
+      .table-wrap { overflow: visible; }
+      table, .table-dense { min-width: 0; }
+      th { white-space: normal; }
+      thead { display: table-header-group; }
+      h1, h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+      tr, figure, .callout, .table-few { break-inside: avoid; page-break-inside: avoid; }
+      p, li { orphans: 2; widows: 2; }
+    }
+
+    /* 共通の部品ここまで */
+  </style>
+</head>
+<body>
+  <!-- [ ] の部分を実際の内容へ置き換え、使わない行と節は消す。ブランド色は --key・--key-strong・--key-bg を変える -->
+  <main>
+    <header class="doc-header">
+      <p class="doc-kind">進捗報告</p>
+      <h1>[案件名]</h1>
+      <dl class="meta">
+        <div><dt>対象期間</dt><dd>[YYYY/MM/DD]〜[YYYY/MM/DD]</dd></div>
+        <div><dt>報告先</dt><dd>[報告先]</dd></div>
+        <div><dt>作成者</dt><dd>[作成者名]</dd></div>
+        <div><dt>作成日</dt><dd>[YYYY/MM/DD]</dd></div>
+      </dl>
+    </header>
+    <section>
+      <h2>結論と全体の状態</h2>
+      <!-- 状態の語は 順調 / 要注意 / 遅延 / 停止 から選び、class は status-ok / status-warn / status-caution / status-err を合わせる -->
+      <div class="callout">
+        <p><strong>全体の状態</strong> <span class="status status-warn">要注意</span></p>
+        <p>[今回の結論を 2 文以内で書く。遅れや未達があれば先に書く]</p>
+      </div>
+    </section>
+    <section>
+      <h2>KPI 表</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="KPI 表">
+        <table>
+          <thead><tr><th scope="col">指標</th><th scope="col" class="num">目標</th><th scope="col" class="num">実績</th><th scope="col" class="num">差</th><th scope="col">状態</th></tr></thead>
+          <tbody>
+            <tr><td>[指標名]</td><td class="num">[目標値]</td><td class="num">[実績値]</td><td class="num">[差]</td><td><span class="status status-ok">順調</span></td></tr>
+            <tr><td>[指標名]</td><td class="num">[目標値]</td><td class="num">[実績値]</td><td class="num">[差]</td><td><span class="status status-warn">要注意</span></td></tr>
+            <tr><td>[指標名]</td><td class="num">[目標値]</td><td class="num">[実績値]</td><td class="num">[差]</td><td><span class="status status-ok">順調</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">出典：[データ元と集計日を書く]</p>
+    </section>
+    <section>
+      <h2>完了したこと</h2>
+      <ul>
+        <li>[完了した項目。作業名ではなく、できるようになったことを書く]</li>
+        <li>[完了した項目]</li>
+        <li>[完了した項目]</li>
+      </ul>
+    </section>
+    <section>
+      <h2>課題とリスク</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="課題とリスクの一覧">
+        <table>
+          <thead><tr><th scope="col">内容</th><th scope="col">影響</th><th scope="col">対応</th><th scope="col">担当</th><th scope="col">状態</th></tr></thead>
+          <tbody>
+            <tr><td>[課題またはリスク]</td><td>[影響する範囲と程度]</td><td>[取る対応]</td><td>[担当者]</td><td><span class="status status-warn">要注意</span></td></tr>
+            <tr><td>[課題またはリスク]</td><td>[影響する範囲と程度]</td><td>[取る対応]</td><td>[担当者]</td><td><span class="status status-caution">遅延</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>次の予定</h2>
+      <div class="table-wrap" tabindex="0" role="region" aria-label="次の予定">
+        <table class="table-actions">
+          <thead><tr><th scope="col">予定</th><th scope="col">担当</th><th scope="col" class="num">期限</th></tr></thead>
+          <tbody>
+            <tr><td>[次の期間に行う作業]</td><td>[担当者]</td><td class="num">[YYYY/MM/DD]</td></tr>
+            <tr><td>[次の期間に行う作業]</td><td>[担当者]</td><td class="num">[YYYY/MM/DD]</td></tr>
+            <tr><td>[次の期間に行う作業]</td><td>[担当者]</td><td class="num">[YYYY/MM/DD]</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>依頼事項</h2>
+      <!-- 依頼が無いときは節ごと消す -->
+      <div class="table-wrap" tabindex="0" role="region" aria-label="依頼事項">
+        <table class="table-actions">
+          <thead><tr><th scope="col">依頼する内容</th><th scope="col">依頼先</th><th scope="col" class="num">期限</th></tr></thead>
+          <tbody>
+            <tr><td>[相手に判断または作業してほしいこと]</td><td>[依頼先]</td><td class="num">[YYYY/MM/DD]</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
