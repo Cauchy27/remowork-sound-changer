@@ -6,8 +6,8 @@ description: |
   【発動キーワード】「ギャルレビュー」「本質ギャル」「本質を突いて」
 allowed-tools: Read, Bash, Glob, Grep
 execution_type: subagent
-version: 1.1.0
-updated: 2026-08-17
+version: 1.2.0
+updated: 2026-10-09
 ---
 
 # Essence Gyaru Review

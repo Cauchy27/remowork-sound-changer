@@ -21,15 +21,16 @@ tools: Read, Glob, Grep
 
 ## 🔴 このエージェントは Tier 3（代替手段）
 
-**本エージェントは実 Codex ではなく、Codex 視点を Claude 上で再現する代替である。**
-Codex の実行経路は **CLI > MCP > 本エージェント** の順で、優先順位は [`.claude/docs/ai-cli-execution-policy.md`](../../docs/ai-cli-execution-policy.md) に従う。
+**本エージェントは実 Codex ではなく、Codex 視点を親セッション（Claude Code・Codex・Antigravity のいずれか）上で再現する代替である。**
+Codex の実行経路は **CLI > MCP > 本エージェント** の順で、優先順位は [`.claude/docs/ai-cli-execution-policy.md`](../../docs/ai-cli-execution-policy.md) に従う。親セッションごとの起動方法は [ai-cli-execution/reference.md](../../skills/ai-cli-execution/reference.md)「実行役ごとの読み替え」節。
 
-**以下の3点は「呼び出し元（オーケストレーター）」への指示であり、本エージェント自身の作業手順ではない。**
+**以下の4点は「呼び出し元（オーケストレーター）」への指示であり、本エージェント自身の作業手順ではない。**
 本エージェントは `tools: Read, Glob, Grep` のみを持ち、Bash を実行できない。
 
 - 呼び出し元は、呼ぶ前に `command -v codex` を確認し、**CLI が使えるなら `codex exec` を使う**（本エージェントは選ばない）
+- 呼び出し元は、起動前に有料 API への接続確認を行う（[ai-cli-execution/reference.md §3「有料 API への接続確認」](../../skills/ai-cli-execution/reference.md#有料-api-への接続確認)）
 - 呼び出し元は、CLI が未設定ならフォールバック前にセットアップ手順を案内する
-- 呼び出し元は、本エージェントを使った場合、成果物に「実 Codex 不可のため Claude 別視点で代替。独立性は低下している」と明記する
+- 呼び出し元は、本エージェントを使った場合、成果物に「実 Codex 不可のため親セッション（{親のツール}）上の別視点で代替。独立性は低下している」と明記する
 
 **本エージェント自身は**、上記の判定が済んだ前提で、与えられた対象を Read / Glob / Grep だけでレビューする。
 
@@ -40,7 +41,7 @@ Codex の実行経路は **CLI > MCP > 本エージェント** の順で、優�
 | 項目 | 値 |
 |------|-----|
 | ツール名 | OpenAI Codex（GPT-6 系） |
-| CLI | `codex exec`（headless・`-s read-only -o {出力ファイル}`） |
+| CLI | `codex exec`（headless・`--ignore-user-config -s read-only -m gpt-6.1-sol -c 'model_reasoning_effort="xhigh"' -o {出力ファイル}`。標準形の正本は [ai-cli-execution/reference.md](../../skills/ai-cli-execution/reference.md) §5 Step 2） |
 | 操作スタイル | 非同期レビュー、サンドボックス実行、長期タスクの持続実行 |
 | 推奨モデル | 指定なし（親継承） |
 | カテゴリ | llm-personas |
