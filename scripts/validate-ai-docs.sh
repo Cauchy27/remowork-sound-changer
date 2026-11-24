@@ -37,6 +37,9 @@
 #   bash scripts/validate-ai-docs.sh 4          # 項目4のみ（引数は項目番号 1〜11 を1つだけ。3=[3][3b][3w]・4=[4][4b]・5=[5][5b]・6=[6][6w]）
 #   bash scripts/validate-ai-docs.sh 10         # [10] のみ（FAIL=1 / 未検査（廃止一覧なし）=2 / それ以外=0）
 #   bash scripts/validate-ai-docs.sh 11         # [11] のみ（WARN 級。AIDOC_STRICT=1 のときだけ WARN で exit 1）
+#   AIDOC_ISR_MANIFEST=/abs/changes.json bash scripts/validate-ai-docs.sh isr
+#     機械診断だけ（独立レビューは未実施）。manifest形式は ISR スキル「機械診断モード」。
+#     未指定時は在庫の計測のみで exit 2。数字1〜11と通常の全項目実行の契約は維持する。
 #   bash scripts/validate-ai-docs.sh --help     # この使い方を表示
 #   AIDOC_STRICT=1 bash scripts/validate-ai-docs.sh   # WARN も FAIL 扱い
 #   AIDOC_ROOT=/path/to/repo bash scripts/validate-ai-docs.sh  # 他リポジトリを対象に実行（対象は引数ではなく環境変数で渡す）
@@ -82,9 +85,9 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 case "${1:-}" in
-  ''|1|2|3|4|5|6|7|8|9|10|11) ;;
+  ''|1|2|3|4|5|6|7|8|9|10|11|isr) ;;
   *)
-    echo "ERROR: 未知の引数: '${1}'（項目番号 1〜11 を指定する。対象リポジトリは AIDOC_ROOT で渡す）。検査は実行していない" >&2
+    echo "ERROR: 未知の引数: '${1}'（項目番号 1〜11 または isr を指定する。対象リポジトリは AIDOC_ROOT で渡す）。検査は実行していない" >&2
     usage >&2
     exit 2
     ;;
@@ -100,6 +103,433 @@ cd "${ROOT_DIR}" || exit 1
 
 ONLY="${1:-}"
 STRICT="${AIDOC_STRICT:-0}"
+
+
+# ISR の決定的診断。既存の任意PyYAMLを安全に再利用し、不在は未実施にする。
+# 通常の項目1〜11とは別の出口を持ち、機械検証だけで ISR PASS を表示しない。
+if [ "${ONLY}" = "isr" ]; then
+  echo "INDEPENDENT_REVIEW: NOT_RUN"
+  echo "HUMAN_APPROVAL: NOT_REQUESTED"
+  echo "INVOCATION: NOT_RUN_SEPARATE_REQUIRED"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ISR_DIAGNOSTIC: NOT_RUN (Python 3なし)"
+    exit 2
+  fi
+  python3 -I - "${ROOT_DIR}" "${AIDOC_ISR_MANIFEST:-}" <<'PYISR'
+import csv
+from datetime import date
+import hashlib
+from itertools import combinations
+import json
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+manifest_path = sys.argv[2]
+failed = []
+not_run = []
+unapplied_findings = []
+source = None
+# スキルの frontmatter のキー（正本: .claude/docs/frontmatter-policy.md §3.1）。
+# 必須は従来の 6 キー。受け付けるのは、公式のスキル項目と管理用の 3 キー。それ以外の最上位のキーは違反にする。
+SKILL_REQUIRED_KEYS = {'name', 'description', 'allowed-tools', 'version', 'updated', 'execution_type'}
+# 公式の項目: code.claude.com/docs/en/skills の Frontmatter reference（2026-11-11 に原文で確認した 20 個）。
+OFFICIAL_SKILL_KEYS = {'name', 'description', 'when_to_use', 'argument-hint', 'arguments',
+                       'disable-model-invocation', 'user-invocable', 'allowed-tools', 'disallowed-tools',
+                       'model', 'effort', 'context', 'agent', 'background', 'hooks', 'paths', 'shell',
+                       'metadata', 'license', 'compatibility'}
+# 管理用のキー: 版・更新日・実行構造の管理に使う（公式には無い）。
+MANAGEMENT_SKILL_KEYS = {'version', 'updated', 'execution_type'}
+SKILL_KEYS = OFFICIAL_SKILL_KEYS | MANAGEMENT_SKILL_KEYS
+# allowed-tools で受け付ける名前: 公式のツール一覧（code.claude.com/docs/en/tools-reference の表。同日に確認した 46 個）。
+# MCP のツールは mcp__ で始まる名前で別に受け付ける。
+TOOLS = {'Agent','Artifact','AskUserQuestion','Bash','CronCreate','CronDelete','CronList','Edit',
+         'EndConversation','EnterPlanMode','EnterWorktree','ExitPlanMode','ExitWorktree','Glob','Grep',
+         'ListAgents','ListMcpResourcesTool','LSP','Monitor','NotebookEdit','PowerShell','PushNotification',
+         'Read','ReadMcpResourceTool','RemoteTrigger','ReportFindings','ScheduleWakeup','SendFeedback',
+         'SendMessage','SendUserFile','ShareOnboardingGuide','Skill','SubagentHandback','TaskCreate',
+         'TaskGet','TaskList','TaskOutput','TaskStop','TaskUpdate','TodoWrite','ToolSearch',
+         'WaitForMcpServers','WebFetch','WebSearch','Workflow','Write'}
+# 旧名（違反にして、現行名を案内する）。起動ツールは 2.1.63 で Task から Agent に改名された。
+# スキルと文書の表記は Agent へ置き換え済みで、旧名は違反にする（2026-11-11 のオーナーの決定）。
+LEGACY_TOOLS = {'Task': 'Agent'}
+# 名前の前後で除く文字: 半角空白・タブ・改行。全角空白などは名前の一部として残し、未対応値にする
+# （行を直接読む validate-structure.sh [j]・validate-agent-invocation.py と同じ。期待値の表は scripts/tests/fixtures-allowed-tools/cases.json）。
+TOOL_NAME_PADDING = ' \t\r\n'
+
+def split_tools(value):
+    # カンマ区切りの allowed-tools を分ける。括弧の中のカンマ（Agent(worker, researcher) など）では区切らない。
+    items, depth, current = [], 0, ''
+    for char in value:
+        if char == '(':
+            depth += 1
+        elif char == ')' and depth:
+            depth -= 1
+        if char == ',' and depth == 0:
+            items.append(current.strip(TOOL_NAME_PADDING))
+            current = ''
+        else:
+            current += char
+    items.append(current.strip(TOOL_NAME_PADDING))
+    return items
+
+def balanced(item):
+    # 括弧の対応が取れているか（開きより先に閉じが来ない。閉じ残しが無い）。個数の一致だけでは判定しない。
+    depth = 0
+    for char in item:
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+def emit(tag, data):
+    print(tag + ' ' + json.dumps(data, ensure_ascii=False, sort_keys=True))
+
+def issue(path, message, incomplete=False, **details):
+    finding = {'path':path,'reason':message,**details}
+    if incomplete:
+        not_run.append(finding)
+    elif not manifest_path:
+        # 在庫の既知事実は残すが、対象・変更種別未指定の観測を適用済み違反にしない。
+        unapplied_findings.append({**finding,'application':'not_applied'})
+    else:
+        failed.append(finding)
+
+# -I は対象cwd/PYTHONPATH/user siteのyaml.pyをimport経路から外す。
+try:
+    import yaml
+except ImportError:
+    emit('ISR_NOT_RUN',{'path':None,'reason':'既存の任意PyYAMLなし。解析未実施（自動導入しない）'})
+    emit('ISR_SUMMARY',{'status':'NOT_RUN','violations':0,'not_run':1,'unapplied_findings':0,
+                        'targets':0,'source':None,'independent_review':'not_run','human_approval':'not_requested'})
+    sys.exit(2)
+
+class InvalidFrontmatter(ValueError):
+    """読取・decode済みの既知の形式不正。"""
+
+class UnsupportedFrontmatter(Exception):
+    """安全な既存parserで解釈できない構文・タグ。"""
+
+def yaml_type(value):
+    if value is None: return 'null'
+    if isinstance(value,str): return 'string'
+    if isinstance(value,bool): return 'boolean'
+    if isinstance(value,(int,float)): return 'number'
+    if isinstance(value,list): return 'list'
+    if isinstance(value,dict): return 'mapping'
+    if type(value) is date: return 'date'
+    return type(value).__name__
+
+def parse(path):
+    raw = path.read_bytes()
+    text = raw.decode('utf-8-sig').replace('\r\n','\n').replace('\r','\n')
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip('\n') != '---':
+        raise InvalidFrontmatter('frontmatter開始なし')
+    end = next((i for i in range(1,len(lines)) if lines[i].rstrip('\n') == '---'), None)
+    if end is None:
+        raise InvalidFrontmatter('frontmatter終端なし')
+    fm = ''.join(lines[1:end])
+    duplicates, states, layouts = [], {}, {}
+    loader = None
+    try:
+        loader = yaml.SafeLoader(fm)
+        node = loader.get_single_node()
+        if node is None:
+            values = {}
+        elif not isinstance(node,yaml.MappingNode):
+            raise InvalidFrontmatter('frontmatterはmappingが必須')
+        else:
+            seen = set()
+            for key_node,value_node in node.value:
+                if key_node.tag == 'tag:yaml.org,2002:merge':
+                    raise UnsupportedFrontmatter('frontmatterのmerge keyは未対応')
+                if not isinstance(key_node,yaml.ScalarNode) or key_node.tag != 'tag:yaml.org,2002:str':
+                    raise InvalidFrontmatter('frontmatterキーは文字列が必須')
+                key = loader.construct_object(key_node,deep=True)
+                if key in seen:
+                    duplicates.append(key)
+                seen.add(key)
+                # YAML nullでも、値の無記入と明示nullを別の観測として残す。
+                if isinstance(value_node,yaml.ScalarNode) and value_node.tag == 'tag:yaml.org,2002:null':
+                    states[key] = 'empty' if value_node.value == '' else 'null'
+                # 値を 1 行に書いているか。キーと同じ行で始まり、同じ行で終わる値だけを 1 行とする（| と > のブロックは複数行）。
+                if isinstance(value_node,yaml.ScalarNode) and (value_node.style in ('|','>')
+                        or value_node.start_mark.line != key_node.start_mark.line
+                        or value_node.end_mark.line != value_node.start_mark.line):
+                    layouts[key] = 'multiline'
+            values = loader.construct_document(node)
+    except yaml.constructor.ConstructorError as error:
+        raise UnsupportedFrontmatter('安全なYAML parserの未対応タグ: ' + str(error)) from error
+    except (yaml.YAMLError,ValueError,TypeError,OverflowError) as error:
+        raise InvalidFrontmatter('YAML形式不正: ' + str(error)) from error
+    except RecursionError as error:
+        raise UnsupportedFrontmatter('YAMLの再帰構造を測定できない') from error
+    finally:
+        if loader is not None:
+            loader.dispose()
+    description = values.get('description')
+    if isinstance(description,str):
+        description = description.strip()
+        values['description'] = description
+        keywords = re.findall(r'「([^」]+)」',description)
+    else:
+        keywords = []
+    # 旧リスト（triggers・autoTrigger）の読取は、非標準キーの禁止を解除しない。本文の例は解析対象外。
+    for key in ('triggers','autoTrigger'):
+        legacy = values.get(key)
+        if isinstance(legacy,list):
+            keywords.extend(word for word in legacy if isinstance(word,str))
+    return values, ''.join(lines[end+1:]), keywords, raw, duplicates, len(fm), states, layouts
+
+def kind(path):
+    if path.name == 'SKILL.md':
+        return 'skill'
+    relative = path.relative_to(root).as_posix()
+    if relative.startswith('.claude/agents/') and path.name not in ('README.md','COMPANY-VALUES.md','AGENTS.md'):
+        return 'agent'
+    if re.search(r'/skills/[^/]+/agents/[^/]+\.md$', relative):
+        return 'material'
+    if relative.startswith('.workflows/') and path.suffix == '.md':
+        return 'workflow'
+    return 'document'
+
+def resolve(relative):
+    if not isinstance(relative,str) or not relative:
+        raise ValueError('対象pathが空または文字列でない')
+    path = root / relative
+    if Path(relative).is_absolute() or not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError('対象pathはroot内の相対pathで指定する')
+    if not path.is_file():
+        raise ValueError('対象ファイルなし: ' + relative)
+    return path
+
+entries = []
+if manifest_path:
+    try:
+        manifest = json.loads(Path(manifest_path).read_text(encoding='utf-8'))
+        source = manifest['source']
+        entries = manifest['files']
+        if not isinstance(source,str) or not source.strip() or not isinstance(entries,list) or not entries:
+            raise ValueError('source識別と非空files配列が必須')
+        seen = set()
+        for entry in entries:
+            if not isinstance(entry,dict) or entry.get('change') not in ('new','full','partial'):
+                raise ValueError('各files要素にpathとchange(new/full/partial)が必須')
+            path = resolve(entry.get('path'))
+            if path in seen:
+                raise ValueError('対象path重複')
+            seen.add(path)
+    except (OSError,UnicodeError,ValueError,KeyError,TypeError) as error:
+        issue(None,'manifest未実施: ' + str(error),True)
+        entries = []
+else:
+    issue(None,'変更種別manifestなし。本文合否と増分は未実施（在庫の計測のみ）',True)
+    paths = set(root.glob('.claude/skills/*/SKILL.md'))
+    paths.update(root.glob('.claude/skills/*/agents/*.md'))
+    paths.update(root.glob('.claude/agents/**/*.md'))
+    paths.update(root.glob('.workflows/*.md'))
+    entries = [{'path':str(path.relative_to(root)),'change':None} for path in sorted(paths)
+               if kind(path) != 'document']
+
+# 比較母集団は現在位置の正本スキル。template/wrapperを別スキルとして二重計上しない。
+categories = {}
+classification = root/'scripts/skill-classification.csv'
+index = root/'.claude/docs/skill-reference.md'
+try:
+    if classification.is_file():
+        with classification.open(encoding='utf-8',newline='') as stream:
+            for row in csv.DictReader(stream):
+                if row.get('name') and row.get('category'):
+                    categories[row['name']] = (row['category'],'classification')
+    if index.is_file():
+        section, fence = None, False
+        for line in index.read_text(encoding='utf-8').splitlines():
+            if line.lstrip().startswith('```'):
+                fence = not fence
+                continue
+            if fence:
+                continue
+            if re.match(r'^#{2,}\s',line):
+                section = line.lstrip('#').strip()
+            if section:
+                names = re.findall(r'\.claude/skills/([a-z0-9-]+)/SKILL\.md',line)
+                names += re.findall(r'^[-*]\s+`([a-z0-9-]+)`\s+(?:—|-)(?:\s|$)',line)
+                for name in names:
+                    categories.setdefault(name,(section,'index'))
+except (OSError,UnicodeError,csv.Error) as error:
+    issue(None,'domain分類未確認: ' + str(error),True)
+
+population = {}
+population_incomplete = {}
+for path in sorted(root.glob('.claude/skills/*/SKILL.md')):
+    try:
+        values,_,keywords,_,_,_,_,_ = parse(path)
+        if isinstance(values.get('description'),str):
+            population[path.parent.name] = set(keywords)
+        else:
+            population_incomplete[str(path.relative_to(root))] = 'descriptionが文字列でなくkeyword未測定'
+    except (OSError,UnicodeError,ValueError,UnsupportedFrontmatter) as error:
+        population_incomplete[str(path.relative_to(root))] = str(error)
+
+for entry in entries:
+    relative = entry['path']
+    try:
+        path = resolve(relative)
+        target_kind = kind(path)
+        raw = path.read_bytes()
+        observation = {'path':relative,'source':source,'sha256':hashlib.sha256(raw).hexdigest(),
+                       'type':target_kind,'change':entry['change'],'independent_review':'not_run',
+                       'size_status':'not_applicable','body_delta':None,'distribution_links':'independent_judgement_required'}
+        if target_kind != 'document':
+            values,body,keywords,raw,duplicates,fm_chars,value_states,layouts = parse(path)
+            name = values.get('name')
+            description = values.get('description')
+            sentence = None
+            if isinstance(description,str):
+                sentence = description.split('。',1)[0] + ('。' if '。' in description else '')
+                sentence = sentence.replace('\n','')
+            observation.update(frontmatter_status='parsed',
+                               name_chars=len(name) if isinstance(name,str) else None,body_chars=len(body),
+                               keywords=keywords if isinstance(description,str) else None,
+                               description_type=yaml_type(description) if 'description' in values else 'missing',
+                               description_value=description if isinstance(description,str) else None,
+                               description_chars=len(description) if isinstance(description,str) else None,
+                               first_sentence_chars=len(sentence) if sentence is not None else None,
+                               frontmatter_chars=fm_chars,references=[],size_status='not_applicable')
+            required = {'name','description'}
+            if target_kind == 'skill':
+                required = SKILL_REQUIRED_KEYS
+            elif target_kind == 'agent':
+                required |= {'tools'}
+            elif target_kind == 'workflow':
+                required |= {'version','updated'}
+            for key in required:
+                value = values.get(key)
+                if key not in values:
+                    issue(relative,'必須値なし: ' + key,field=key,value_state='missing')
+                elif value is None:
+                    issue(relative,'必須値なし: ' + key,field=key,value_state=value_states.get(key,'null'),actual_type='null')
+                elif not isinstance(value,str) and not (key=='updated' and type(value) is date):
+                    issue(relative,'必須値の型不正: ' + key,field=key,value_state='invalid_type',actual_type=yaml_type(value))
+                elif isinstance(value,str) and not value.strip():
+                    issue(relative,'必須値なし: ' + key,field=key,value_state='empty',actual_type='string')
+            for key in duplicates:
+                issue(relative,'frontmatterキー重複: ' + key)
+            if isinstance(name,str) and (not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*',name) or len(name)>64):
+                issue(relative,'name形式/64字上限')
+            if target_kind == 'skill' and isinstance(name,str) and name != path.parent.name:
+                issue(relative,'nameとディレクトリ名不一致')
+            if target_kind in ('agent','material') and isinstance(name,str) and name != path.stem:
+                issue(relative,'nameとファイル名不一致')
+            if target_kind in ('skill','workflow'):
+                version = values.get('version')
+                if isinstance(version,str) and not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?',version):
+                    issue(relative,'versionのsemver形式')
+                try:
+                    updated = values.get('updated')
+                    if type(updated) is not date:
+                        if not isinstance(updated,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',updated):
+                            raise ValueError('YYYY-MM-DD必須')
+                        date.fromisoformat(updated)
+                except ValueError:
+                    issue(relative,'updatedの日付形式/暦')
+            if target_kind == 'skill':
+                for key in sorted(values.keys() - SKILL_KEYS, key=str):
+                    issue(relative,'非標準frontmatterキー: ' + str(key))
+                tools_value = values.get('allowed-tools')
+                # 1 行に書いた値だけを受け付ける。行を直接読む検査器 2 本（validate-structure.sh [j]・
+                # validate-agent-invocation.py）は、複数行の値を読めない（YAML として正しくても、同じ値を見られない）。
+                if isinstance(tools_value,str) and layouts.get('allowed-tools') == 'multiline':
+                    issue(relative,'allowed-toolsは1行で書く')
+                tools = split_tools(tools_value) if isinstance(tools_value,str) else []
+                for tool in tools:
+                    # 括弧の対応が取れない値は解析できない。後ろの名前の検査が抜けるので、正常として通さない。
+                    if not balanced(tool):
+                        issue(relative,'allowed-toolsの括弧不整合: ' + tool)
+                        continue
+                    # 括弧の前の名前で判定する。括弧の前の空白（Agent (worker)）は名前に含めない。
+                    base = tool.split('(',1)[0].strip(TOOL_NAME_PADDING)
+                    if base in LEGACY_TOOLS:
+                        issue(relative,'allowed-toolsの旧名: ' + tool + '（' + LEGACY_TOOLS[base] + ' と書く）')
+                    elif base not in TOOLS and not re.fullmatch(r'mcp__[A-Za-z0-9_*-]+',base):
+                        issue(relative,'allowed-toolsの未対応値: ' + tool)
+                execution_type = values.get('execution_type')
+                if execution_type not in ('standalone','agent-teams','subagent','hybrid'):
+                    issue(relative,'execution_typeの値域')
+                if execution_type == 'standalone' and any((path.parent/'agents').glob('*.md')):
+                    issue(relative,'standaloneにagents/素材が存在')
+                # 先頭位置・記述形は情報級。新規/全面でも合否に数えず独立判断へ渡す。
+                observation['description_form_review_required'] = (not keywords or len(sentence)>40 or description.startswith(('【','「','『','['))) if isinstance(description,str) else None
+                if entry['change'] in ('new','full'):
+                    observation['size_status'] = 'within_limit' if len(body)<=5500 else 'over_limit'
+                    if len(body)>5500:
+                        issue(relative,'本文5500字超過（新規/全面）')
+                elif entry['change'] == 'partial':
+                    observation['size_status'] = 'not_run'
+                    try:
+                        before = resolve(entry.get('before'))
+                        _,old_body,_,old_raw,_,_,_,_ = parse(before)
+                        observation.update(body_delta=len(body)-len(old_body),before_sha256=hashlib.sha256(old_raw).hexdigest(),
+                                           size_status='increment_review_required')
+                    except (OSError,UnicodeError,ValueError,UnsupportedFrontmatter) as error:
+                        issue(relative,'部分変更のbefore未確認: ' + str(error),True)
+                else:
+                    observation['size_status'] = 'not_run'
+                for reference in sorted(path.parent.glob('reference*.md')):
+                    count = len(reference.read_text(encoding='utf-8').splitlines())
+                    observation['references'].append({'path':str(reference.relative_to(root)),'lines':count,'over_100_advisory':count>100})
+        emit('ISR_OBSERVATION',observation)
+    except InvalidFrontmatter as error:
+        issue(relative,'既知frontmatter形式不正: ' + str(error),format_status='invalid')
+        observation.update(frontmatter_status='invalid',name_chars=None,description_chars=None,
+                           first_sentence_chars=None,body_chars=None,keywords=None,size_status='not_run')
+        emit('ISR_OBSERVATION',observation)
+    except (OSError,UnicodeError,ValueError,TypeError,UnsupportedFrontmatter) as error:
+        issue(relative,'対象診断未実施: ' + str(error),True)
+
+# 対象内は上の型/形式/未読判定へ一本化。対象外母集団の抽出不能も衝突なしにはしない。
+selected = {entry['path'] for entry in entries}
+for relative,reason in population_incomplete.items():
+    if relative not in selected:
+        issue(relative,'keyword母集団未確認: ' + reason,True)
+
+keywords_all = sorted(set().union(*population.values()) if population else set())
+for keyword in keywords_all:
+    names = sorted(name for name,words in population.items() if keyword in words)
+    if len(names)<2:
+        continue
+    # 異domainを含む集合でも、その中の同domainペアを隠さない。
+    for pair in combinations(names,2):
+        domains = {name:categories.get(name,(None,None))[0] for name in pair}
+        if any(value is None for value in domains.values()):
+            relation = 'unknown_domain'
+        elif len(set(domains.values())) == 1:
+            relation = 'same_domain_candidate'
+        else:
+            relation = 'cross_domain_candidate'
+        emit('ISR_KEYWORD_OVERLAP',{'keyword':keyword,'skills':list(pair),'domains':domains,
+                                   'domain_sources':{name:categories.get(name,(None,None))[1] for name in pair},
+                                   'domain_relation':relation,'semantic_conflict':None})
+for item in failed:
+    emit('ISR_VIOLATION',item)
+for item in not_run:
+    emit('ISR_NOT_RUN',item)
+for item in unapplied_findings:
+    emit('ISR_UNAPPLIED_FINDING',item)
+status = 'FAIL' if failed else ('NOT_RUN' if not_run else 'COMPLETE')
+emit('ISR_SUMMARY',{'status':status,'violations':len(failed),'not_run':len(not_run),'unapplied_findings':len(unapplied_findings),
+                    'targets':len(entries),'source':source,'independent_review':'not_run','human_approval':'not_requested',
+                    'separate_required':['current_links','wrapper_sync','agent_invocation'],
+                    'metadata_tokens':'advisory_not_measured','semantic_keywords':'independent_judgement_required'})
+sys.exit(1 if failed else (2 if not_run else 0))
+PYISR
+  exit "$?"
+fi
 
 VIOLATIONS=()
 WARNINGS=()
@@ -231,7 +661,47 @@ if run_check 4; then
     # Markdown リンク [text](path) を抽出
     #   除外: コードブロック内 / http(s) / mailto / アンカーのみ /
     #         プレースホルダを含むパス（{...}） / 説明用の省略記号（...）
-    awk '/^[ \t]*```/ { inblock = !inblock; next } !inblock { print }' "$f" 2>/dev/null \
+    # 同じ行内で同じ長さのバッククォート列が閉じたコードだけを除く。
+    # 開き側は直前の backslash が奇数ならエスケープ。コード内の backslash は文字のまま。
+    awk '
+      function without_code(text, out, pos, after, size, scan, finish, close_at, back, slashes) {
+        if (!index(text, "`")) return text
+        out = ""
+        pos = 1
+        while (pos <= length(text)) {
+          if (substr(text, pos, 1) != "`") {
+            out = out substr(text, pos++, 1)
+            continue
+          }
+          slashes = 0
+          for (back = pos - 1; back > 0 && substr(text, back, 1) == "\\"; back--) slashes++
+          if (slashes % 2) {
+            out = out substr(text, pos++, 1)
+            continue
+          }
+          after = pos + 1
+          while (substr(text, after, 1) == "`") after++
+          size = after - pos
+          close_at = 0
+          scan = after
+          while (scan <= length(text)) {
+            if (substr(text, scan, 1) != "`") { scan++; continue }
+            finish = scan + 1
+            while (substr(text, finish, 1) == "`") finish++
+            if (finish - scan == size) { close_at = finish; break }
+            scan = finish
+          }
+          if (close_at) pos = close_at
+          else {
+            out = out substr(text, pos, size)
+            pos = after
+          }
+        }
+        return out
+      }
+      /^[ \t]*```/ { inblock = !inblock; next }
+      !inblock { print without_code($0) }
+    ' "$f" 2>/dev/null \
       | grep -o '](\([^)]*\))' \
       | sed 's/^](//; s/)$//' \
       | sed 's/#.*$//' \

@@ -6,3 +6,24 @@
 dual-ai-meter	2026-07-31	-	計測系を aggregate-ai-usage.py へ統合
 daily-handover	2026-07-03	-	日次申し送り運用の廃止
 daily-personal-report	2026-07-03	-	同上
+capacity-plan	2026-11-01	-	Claude 0 / Codex 0・plugin 同名・孤立。判断 #5=A（2026-09-18）
+change-request	2026-11-02	-	Claude 0 / Codex 1・plugin 同名。判断 #5=A（2026-09-18）
+claude-setup-audit	2026-11-01	-	/doctor・/skill-doctor（v2.1.252+）が代替。判断 #6=A（2026-09-18）
+competitive-brief	2026-11-01	-	Claude 0 / Codex 0・plugin 同名・孤立（U2 E）・research が包含。判断 #5=A（2026-09-18）
+metrics-review	2026-11-01	-	Claude 0 / Codex 0・plugin 同名・PM 系。判断 #5=A（2026-09-18）
+product-brainstorming	2026-11-01	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+self-evolution	2026-11-01	-	Claude 0 / Codex 1・agents 不変方針と衝突（自動書換）。判断 #5=A（2026-09-18）
+session-briefing	2026-11-01	-	日次申し送り運用は廃止済み（2026-07-03 裁定）。判断 #6=A（2026-09-18）
+session-logging	2026-11-01	-	孤立（被参照 1）・最終使用 192 日前。判断 #6=A（2026-09-18）
+sprint-planning	2026-11-01	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+support-record	2026-11-01	-	Claude 0 / Codex 2・孤立・support-response と Jaccard 0.24。判断 #5=A（2026-09-18）
+support-response	2026-11-01	-	Claude 0 / Codex 3・孤立。判断 #5=A（2026-09-18）
+task-inventory	2026-11-01	-	Claude 0 / Codex 0・孤立・aggregate-ai-usage.py と /skill-doctor が代替。判断 #5=A（2026-09-18）
+vendor-review	2026-11-02	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+compliance-tracking	2026-11-06	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+risk-assessment	2026-11-06	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+process-doc	2026-11-06	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+process-optimization	2026-11-06	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+runbook	2026-11-06	-	Claude 0 / Codex 0・plugin 同名。判断 #5=A（2026-09-18）
+incident-response	2026-11-06	-	Claude 0 / Codex 0・plugin 同名・孤立。判断 #5=A（2026-09-18）
+tech-debt	2026-11-06	-	Claude 0 / Codex 0・plugin 同名・孤立。判断 #5=A（2026-09-18）
