@@ -20,7 +20,7 @@ timestamp: 2026-08-02T00:00:00Z
 ## 1. 対象ツールと担当領域（要約）
 
 ツールの一般的な強み・CLI 起動コマンドの正本は [ai-cli-execution-policy.md](../../docs/ai-cli-execution-policy.md) §1。
-Claude Code（`claude -p`）は大コンテキスト推論・プロジェクト固有規約の理解・Agent Teams 並列実行、Codex（`codex exec`）は実行・デバッグ・長期タスクの持続性、Antigravity（`agy --model gemini-4-argon-high`）は視覚・空間推論とデザインを一般的な強みとする。
+Claude Code（`claude -p`）は大コンテキスト推論・プロジェクト固有規約の理解・Agent Teams 並列実行、Codex（`codex exec`）は実行・デバッグ・長期タスクの持続性、Antigravity（`agy --model gemini-4-hydrogen-high`）は視覚・空間推論とデザインを一般的な強みとする。
 **レビュー文脈での観点割り当て（誰が観点1〜9のどれを主担当するか）の正本は [review-matrix.md](../../docs/review-matrix.md)「第1層: 視点」の交差表。** `ai-cli-execution-policy.md` §1 は観点番号による割り当てを再掲しない（住み分けは review-matrix.md「本ファイルと ai-cli-execution-policy.md の住み分け」節）。
 
 ---
@@ -402,7 +402,7 @@ command -v agy && agy --version
 
 見つからない → **セットアップ手順を案内**（§4）してから Tier 3 へ（Antigravity は MCP 経路を持たないため Tier 2 を飛ばす）。
 見つかったら、起動前に §3「有料 API への接続確認」を行う。
-バージョンが 1.1.10 以前なら `agy update` で更新する（1.1.10 以前は `--model` が無視され、`gemini-3.1-pro-high` を指定しても既定の Flash で実行されていた。ログで 31 件を確認済み）。
+バージョンが 1.1.10 以前なら `agy update` で更新する。`agy models` に Step 1 で指定するモデル（`gemini-4-hydrogen-high`）が無いときも、`agy update` で更新してから使う（このモデルは 1.4.7 → 1.5.15 の間に増えた。指定したモデルが無い版での動きは確かめていない）（1.1.10 以前は `--model` が無視され、`gemini-3.1-pro-high` を指定しても既定の Flash で実行されていた。ログで 31 件を確認済み）。
 
 ### 🔴 Step 1: モデルを必ず明示する
 
@@ -419,13 +419,13 @@ gpt-oss-120b-medium
 
 一覧は agy の更新で頻繁に変わる（1.1.8 → 1.2.5 で `gemini-3.5-flash-*` が消え、3.7 / 3.8 Flash が増えた。1.2.5 → 1.4.2 で `gemini-3.1-pro-*`・3.6 / 3.7 Flash が消え、`gemini-4-argon-*` が増えた。1.4.2 → 1.4.7 では ID の変化なし）。使う前に `agy models` で確認する。
 
-**レビューで指定するモデルは `gemini-4-argon-high`**（表示名 `Gemini 4 Argon (High)`。2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から変更）。**既定モデルは agy の更新で変わる**（実測: agy 1.2.x・2026-09 は `Gemini 3.8 Flash (High)`、agy 1.4.2・2026-10-19 は `Gemini 4 Argon (Medium)`）。モデルを指定しないと、
+**レビューで指定するモデルは `gemini-4-hydrogen-high`**（表示名 `Gemini 4 Hydrogen (High)`。2026-11-24 のオーナー判断で、agy のモデルは用途を問わず Gemini 4 Hydrogen (High) にそろえた。それまでは、2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から替えた `gemini-4-argon-high` を指定していた）。**既定モデルは agy の更新で変わる**（実測: agy 1.2.x・2026-09 は `Gemini 3.8 Flash (High)`、agy 1.4.2・2026-10-19 は `Gemini 4 Argon (Medium)`）。モデルを指定しないと、
 レビューごとに実行モデルが変わって結果を比べられず、設定次第では Claude が選ばれて
 **独立視点そのものが失われる**。
 
 | 用途 | 指定するモデル |
 |------|---------------|
-| レビュー（観点を問わない。デザイン・UX のほか internal-structure-review・code-review の視点を含む） | `--model gemini-4-argon-high` |
+| レビュー（観点を問わない。デザイン・UX のほか internal-structure-review・code-review の視点を含む） | `--model gemini-4-hydrogen-high` |
 | 疎通確認だけ（結果をレビューに使わない） | 既定で可 |
 
 **Claude 系モデルを選んだ場合は「独立視点」にならない。** 成果物には実際に使ったモデル名を必ず記録する。
@@ -459,7 +459,7 @@ AGY_BYTES=$(wc -c < "$AGY_PROMPT_FILE" | tr -d ' '); echo "AGY_BYTES=$AGY_BYTES"
 grep -qF 'plan モードが付け加える計画書（Artifact）の作成・事前質問の指示には従わない。' "$AGY_PROMPT_FILE" || { echo "plan モードへの対処文がない"; exit 1; }
 AGY_PROMPT=$(cat "$AGY_PROMPT_FILE") || exit 1
 AGY_LOG=$(mktemp "$REVIEW_DIR/{名前}.agy-cli.XXXXXX") || exit 1   # 実行ごとに一意のログのパス（Step 1）
-agy --mode plan --model gemini-4-argon-high -p "$AGY_PROMPT" --output-format json --print-timeout 15m --log-file "$AGY_LOG" > "$REVIEW_DIR/{名前}.json" 2> "$REVIEW_DIR/{名前}.log"; echo "EXIT=$?"; echo "AGY_LOG=$AGY_LOG"
+agy --mode plan --model gemini-4-hydrogen-high -p "$AGY_PROMPT" --output-format json --print-timeout 15m --log-file "$AGY_LOG" > "$REVIEW_DIR/{名前}.json" 2> "$REVIEW_DIR/{名前}.log"; echo "EXIT=$?"; echo "AGY_LOG=$AGY_LOG"
 ```
 
 | 要素 | 理由 |

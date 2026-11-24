@@ -165,7 +165,7 @@ Codex: 利用不可（CLI / MCP とも疎通せず）。親セッション（{�
 
 **Cursor / Copilot は視点として使わない。** CLI を持たず机上ペルソナにならざるを得ないため、独立性が担保できない。エージェント定義（`.claude/agents/llm-personas/`）は他用途のために残置するが、本マトリクスの視点には含めない。
 
-**Gemini は単体の机上ペルソナとしては使わない。** Gemini の推論能力は Antigravity CLI（`agy --model gemini-4-argon-high` 等）経由で利用する。「モデル名」（Gemini）と「実行環境＝視点」（Antigravity）は別物であり、混同しないこと。Antigravity という視点の内部でどのモデルを選ぶかは `ai-cli-execution-policy.md` §1 の担当領域定義に従う。
+**Gemini は単体の机上ペルソナとしては使わない。** Gemini の推論能力は Antigravity CLI（`agy --model gemini-4-hydrogen-high` 等）経由で利用する。「モデル名」（Gemini）と「実行環境＝視点」（Antigravity）は別物であり、混同しないこと。Antigravity という視点の内部でどのモデルを選ぶかは `ai-cli-execution-policy.md` §1 の担当領域定義に従う。
 
 ---
 

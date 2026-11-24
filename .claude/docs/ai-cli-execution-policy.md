@@ -23,7 +23,7 @@ Claude Code（`claude -p`。親セッションとは別プロセスで起動す�
 |--------|-----|------|
 | **Claude Code** | `claude -p`（別プロセスとして独立実行。親が Claude Code ならネスト起動） | 大コンテキスト推論、プロジェクト固有規約の理解、Agent Teams 並列実行 |
 | **Codex**（GPT-6 系） | `codex exec` | 実行・デバッグ・長期タスクの持続性。指摘が具体的で実行可能。ゴールへの執着が強く、中途半端な結論で止まらない |
-| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-4-argon-high` | **Gemini 系指定時**、視覚・空間推論とデザインに強い（下記の根拠は Gemini 3 系での評価）。2D UI/UX とグラフィカルプログラミングの理解が native。レビューで指定するモデルは 2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から `gemini-4-argon-high` へ変更 |
+| **Antigravity**（`agy`。マルチモデル基盤） | `agy --model gemini-4-hydrogen-high` | **Gemini 系指定時**、視覚・空間推論とデザインに強い（下記の根拠は Gemini 3 系での評価）。2D UI/UX とグラフィカルプログラミングの理解が native。指定するモデルは、2026-11-24 のオーナー判断で用途を問わず `gemini-4-hydrogen-high`（それまでは 2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から替えた `gemini-4-argon-high`） |
 
 ### 観点の割り当て指針
 

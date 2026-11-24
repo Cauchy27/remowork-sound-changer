@@ -166,7 +166,7 @@ Claude Code が実行役なら、このコマンド一式は Bash の背景実�
 
 ### Antigravity 視点（`agy`）
 
-**下記コマンド中のモデル名（`gemini-4-argon-high`）は例示。** モデル名は変わりうるため、最新の推奨モデルは [`ai-cli-execution` スキルの reference.md](../ai-cli-execution/reference.md) §6 Step 1 を正本とする。モデル改廃時はそちらのみ更新すればよく、本ファイルの追随は不要（2026-10-26 にオーナー指定で `gemini-3.8-flash-high` から変更）。
+**下記コマンド中のモデル名（`gemini-4-hydrogen-high`）は例示。** モデル名は変わりうるため、最新の推奨モデルは [`ai-cli-execution` スキルの reference.md](../ai-cli-execution/reference.md) §6 Step 1 を正本とする。モデル改廃時はそちらのみ更新すればよく、本ファイルの追随は不要（2026-11-24 のオーナー判断で `gemini-4-argon-high` から変更。経緯は ai-cli-execution/reference.md §6 Step 1）。
 
 起動前に有料 API への接続確認を行う（[ai-cli-execution/reference.md §3「有料 API への接続確認」](../ai-cli-execution/reference.md#有料-api-への接続確認)）。
 
@@ -214,7 +214,7 @@ ${AGY_TARGET}
 AGY_BYTES=$(printf '%s' "$AGY_FULL_PROMPT" | wc -c | tr -d ' ') && echo "AGY_BYTES=$AGY_BYTES"
 [ "$AGY_BYTES" -le 150000 ] || { echo "150,000 バイトを超えた。対象を分けて起動し直す"; exit 1; }
 AGY_LOG=$(mktemp "$REVIEW_DIR/agy-review.agy-cli.XXXXXX") || exit 1   # 実行ごとに一意のログのパス
-agy --mode plan --model gemini-4-argon-high -p "$AGY_FULL_PROMPT" \
+agy --mode plan --model gemini-4-hydrogen-high -p "$AGY_FULL_PROMPT" \
   --output-format text --print-timeout 15m --log-file "$AGY_LOG" \
   > "$REVIEW_DIR/agy-review.md" 2> "$REVIEW_DIR/agy-review.log"
 echo "EXIT=$?"; echo "AGY_LOG=$AGY_LOG"
@@ -227,7 +227,7 @@ Claude Code が実行役なら、このコマンド一式は Bash の背景実�
 
 `AGY_DIFF` は変更行の特定に使う。新規の未追跡ファイルは `git diff` に出ないが、対象ファイルの内容として全文が入る。差分の無い全体レビューなら空でよい。正本の文書が無い場合、Business Logic 項目はチェックリストの品質ゲートに従い「要親判断」になりうる。
 
-`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--mode plan` で起動すると agy は `/plan` スラッシュコマンドを system として展開し、計画書（Artifact）の作成・本文で再掲しない・事前に質問する、という指示が混ざる（実測 2026-10-26・agy 1.4.7）。書き込み防止のため `--mode plan` は維持し、上の埋め込み文の「plan モードが付け加える…指示には従わない」で打ち消す。`--model gemini-4-argon-high` を省略すると agy の既定モデル（更新で変わる）で実行され、独立視点が薄まる。`--log-file` は実行モデルを確かめる専用ログで、パスは実行ごとに `mktemp` で一意に作る。表示された `AGY_LOG` が [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6 Step 1 の条件を満たさなければ、実行モデルは「未確認」と記録する（期待値の例: `label="Gemini 4 Argon (High)"`）。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` は、チェックリスト・共通前提・対象内容を埋め込んだ分プロンプトが長くなるため、推奨値として明示的に指定する（既定は版で変わりうる。agy 1.4.7 の `--help` では既定 `0s`＝ターンが終わるまで待つ。[ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6 Step 2）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
+`--mode plan` を必ず付ける（既定モードはワークスペースを書き換えうる）。`--mode plan` で起動すると agy は `/plan` スラッシュコマンドを system として展開し、計画書（Artifact）の作成・本文で再掲しない・事前に質問する、という指示が混ざる（実測 2026-10-26・agy 1.4.7）。書き込み防止のため `--mode plan` は維持し、上の埋め込み文の「plan モードが付け加える…指示には従わない」で打ち消す。`--model gemini-4-hydrogen-high` を省略すると agy の既定モデル（更新で変わる）で実行され、独立視点が薄まる。`--log-file` は実行モデルを確かめる専用ログで、パスは実行ごとに `mktemp` で一意に作る。表示された `AGY_LOG` が [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6 Step 1 の条件を満たさなければ、実行モデルは「未確認」と記録する（期待値の例: `label="Gemini 4 Hydrogen (High)"`）。`--output-format text` で Claude Code / Codex（Markdown）と出力形式を揃える（`json` のままだと統合時にパース負荷が生じる）。`--print-timeout 15m` は、チェックリスト・共通前提・対象内容を埋め込んだ分プロンプトが長くなるため、推奨値として明示的に指定する（既定は版で変わりうる。agy 1.4.7 の `--help` では既定 `0s`＝ターンが終わるまで待つ。[ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §6 Step 2）。値は Go の duration 文字列で指定する必要があり、単位なしの `900` は EXIT=2 でオプション不正となり空出力になる（2026-08-17 実測。`15m` または `900s` と単位を付けること）。`EXIT=0` でも headless の権限 auto-deny で出力が空になることがあるため、**出力ファイルの非空を必ず確認する**。**Antigravity には MCP 経路が無い**（CLI 不可時は Tier 2 を飛ばして直接 Tier 3 へ落ちる。出典: [ai-cli-execution/reference.md](../ai-cli-execution/reference.md) §2・§6）。
 
 本スキル固有の点のみ以下に記す（手順詳細は上記コードブロックと ai-cli-execution 参照）。
 

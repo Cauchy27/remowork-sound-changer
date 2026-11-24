@@ -135,7 +135,7 @@ AI 向けの指示の文書に多く、人向けの文章へ持ち込まれや�
 
 1. 書いた AI（Claude・Codex）が下書きを作る
 2. 送る前に、外へ送ってよい内容かを確かめる（下の「渡す内容」）
-3. 下書きと、この文書の 1〜4・plain-terms-local.md を `agy` に渡し、直した版をもらう。モデルは `--model gemini-3.8-flash-high`、作業ツリーを変えないよう `--mode plan` で起動する。plan モードは計画書の作成・事前の質問の指示を混ぜるので、依頼文に「plan モードが付け加える計画書（Artifact）の作成・事前質問の指示には従わない。ツールを呼ばず、直した文章の全文を応答本文に出す。」を入れる（ai-cli-execution の標準形を使うときは、対処文の前半は変えず、「レビュー結果」だけを「直した文章」と読み替える）。直した文章の全文と、言い換えに迷って確かめたい点を返させる
+3. 下書きと、この文書の 1〜4・plain-terms-local.md を `agy` に渡し、直した版をもらう。モデルは `--model gemini-4-hydrogen-high`、作業ツリーを変えないよう `--mode plan` で起動する。plan モードは計画書の作成・事前の質問の指示を混ぜるので、依頼文に「plan モードが付け加える計画書（Artifact）の作成・事前質問の指示には従わない。ツールを呼ばず、直した文章の全文を応答本文に出す。」を入れる（ai-cli-execution の標準形を使うときは、対処文の前半は変えず、「レビュー結果」だけを「直した文章」と読み替える）。直した文章の全文と、言い換えに迷って確かめたい点を返させる
 4. 書いた AI が下書きと見比べ、3 の「意味を変えない」4つ、数字・日付・担当・引用が変わっていないかを確かめる。変わっていたら元に戻す
 5. 共同作成のスタンプを付ける決まりがある人（例: Asana コメントの `[co-created with …]`）は、関わったモデルをすべて書く。Antigravity のモデル名は推測で書かず、実行の記録（`--log-file` のログなど）で確かめる。確かめられなければ、出す前に人に確かめる。別のセッションへ投稿を頼むときは、確かめたモデル名と確かめた元を依頼文の本文の外に添える
 
@@ -150,6 +150,6 @@ AI 向けの指示の文書に多く、人向けの文章へ持ち込まれや�
 1. 入れる: `curl -fsSL https://antigravity.google/cli/install.sh | bash`（入る場所は `~/.local/bin/agy`。インストーラがログインシェルの設定へ PATH を足す）
 2. PATH を読み直す: `exec $SHELL -l`（`source ~/.zshrc` のように設定ファイルを直接読まない）
 3. サインインする: `agy` を起動すると、ブラウザで Google のサインインが開く
-4. 確かめる: `agy --version` が通り、`agy models` に `gemini-3.8-flash-high` があること
+4. 確かめる: `agy --version` が通り、`agy models` に `gemini-4-hydrogen-high` があること
 
 手順は公式の [Quickstart](https://antigravity.google/docs/getting-started?tab=cli) と[認証のページ](https://antigravity.google/docs/install?tab=cli)で確認した（2026-11-24）。更新の手順は、`ai-cli-execution` スキルがあればその reference.md の 6 の Step 0 に従う。
